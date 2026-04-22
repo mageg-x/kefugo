@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>零点客服 SDK 浮窗演示</title>
+  <style>
+    :root {
+      --bg: #f0f4ff;
+      --bg-card: rgba(255, 255, 255, 0.85);
+      --ink: #0f172a;
+      --ink-soft: #475569;
+      --ink-mute: #64748b;
+      --primary: #6366f1;
+      --primary-light: #818cf8;
+      --primary-dark: #4f46e5;
+      --accent: #06b6d4;
+      --line: rgba(99, 102, 241, 0.15);
+      --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.04);
+      --shadow-md: 0 4px 20px rgba(15, 23, 42, 0.08);
+      --shadow-lg: 0 8px 40px rgba(15, 23, 42, 0.12);
+      --shadow-glow: 0 0 60px rgba(99, 102, 241, 0.15);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      background:
+        radial-gradient(ellipse 1200px 600px at 20% -10%, rgba(99, 102, 241, 0.12), transparent),
+        radial-gradient(ellipse 800px 400px at 80% 20%, rgba(6, 182, 212, 0.08), transparent),
+        radial-gradient(ellipse 600px 300px at 50% 100%, rgba(99, 102, 241, 0.06), transparent),
+        linear-gradient(180deg, #f0f4ff 0%, #f8faff 50%, #f0f4ff 100%);
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background:
+        radial-gradient(ellipse 800px 800px at 10% 10%, rgba(99, 102, 241, 0.04), transparent),
+        radial-gradient(ellipse 600px 600px at 90% 80%, rgba(6, 182, 212, 0.04), transparent);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%236366f1' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 24px 0;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--ink);
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+
+    .logo-icon img {
+      width: 28px;
+      height: 28px;
+      object-fit: contain;
+    }
+
+    .logo-icon:hover {
+      transform: translateY(-2px) scale(1.05);
+      box-shadow: 0 8px 30px rgba(99, 102, 241, 0.5);
+    }
+
+    .logo-icon::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, transparent, rgba(255,255,255,0.2));
+    }
+
+    .logo-text {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, var(--ink), var(--ink-soft));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero {
+      /* padding: 60px 0 80px; */
+      text-align: center;
+      position: relative;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 18px;
+      background: rgba(99, 102, 241, 0.08);
+      border: 1px solid rgba(99, 102, 241, 0.18);
+      border-radius: 100px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 28px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      position: relative;
+    }
+
+    .hero-badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      background: var(--primary);
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.1); }
+    }
+
+    h1 {
+      font-size: clamp(32px, 5vw, 48px);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -1px;
+      margin-bottom: 20px;
+      position: relative;
+      background: linear-gradient(135deg, var(--ink), var(--ink-soft));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-desc {
+      font-size: 17px;
+      color: var(--ink-soft);
+      max-width: 520px;
+      margin: 0 auto 32px;
+      line-height: 1.8;
+      position: relative;
+    }
+
+    .code-card {
+      border-radius: 20px;
+      border: 1px solid rgba(17, 27, 49, 0.8);
+      background: linear-gradient(165deg, #0b1220 0%, #0f1e3b 40%, #13294f 100%);
+      box-shadow: 0 20px 50px rgba(9, 18, 37, 0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+      overflow: hidden;
+      max-width: 800px;
+      margin: 0 auto 32px;
+      position: relative;
+    }
+
+    .code-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.5), transparent);
+    }
+
+    .code-head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .code-title {
+      color: #93c5fd;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 500;
+    }
+
+    .dots {
+      display: inline-flex;
+      gap: 6px;
+    }
+
+    .dots i {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
+      position: relative;
+    }
+
+    .dots i:nth-child(1) { background: #ff5f57; }
+    .dots i:nth-child(2) { background: #febc2e; }
+    .dots i:nth-child(3) { background: #28c840; }
+
+    .code-body {
+      margin: 0;
+      padding: 28px 32px;
+      color: #dbeafe;
+      font: 14px/2 "SF Mono", "Fira Code", "Consolas", monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .tk1 { color: #93c5fd; }
+    .tk2 { color: #fca5a5; }
+    .tk3 { color: #86efac; }
+
+    .info-card {
+      background: var(--bg-card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 32px 36px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      position: relative;
+      overflow: hidden;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .info-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.3), transparent);
+    }
+
+    .info-card h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .info-card h2 span {
+      font-size: 24px;
+    }
+
+    .info-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .info-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 14px;
+      color: var(--ink-soft);
+      line-height: 1.6;
+    }
+
+    .info-item::before {
+      content: '✓';
+      flex-shrink: 0;
+      width: 20px;
+      height: 20px;
+      background: rgba(99, 102, 241, 0.1);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .cta-hint {
+      margin-top: 48px;
+      padding: 24px;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(6, 182, 212, 0.08));
+      border: 1px solid rgba(99, 102, 241, 0.12);
+      border-radius: 16px;
+      text-align: center;
+      position: relative;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .cta-hint p {
+      color: var(--ink-soft);
+      font-size: 14px;
+    }
+
+    .cta-hint strong {
+      color: var(--primary);
+    }
+
+    footer {
+      padding: 32px 0;
+      text-align: center;
+    }
+
+    footer p {
+      color: var(--ink-mute);
+      font-size: 13px;
+    }
+
+    @media (max-width: 768px) {
+      .param-item {
+        flex-direction: column;
+        gap: 6px;
+      }
+      .param-label {
+        width: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <a href="/" class="logo">
+        <div class="logo-icon"><img src="./logo.png" alt="logo"></div>
+        <span class="logo-text">零点客服</span>
+      </a>
+    </header>
+
+    <section class="hero">
+      <div class="hero-badge">SDK 浮窗演示</div>
+      <h1>网页嵌入式接入</h1>
+      <p class="hero-desc">
+        右下角会出现"在线咨询"浮窗按钮<br>
+        该页面用于验证网页嵌入式接入效果
+      </p>
+    </section>
+
+    <div class="code-card">
+      <div class="code-head">
+        <span class="code-title">
+          <span class="dots"><i></i><i></i><i></i></span>
+          演示参数
+        </span>
+      </div>
+      <pre class="code-body"><span class="tk1">appId</span>  <span class="tk2">=</span>  <span class="tk3">"demo_kefu_app"</span>
+<span class="tk1">userId</span> <span class="tk2">=</span> <span class="tk3">"u_demo_visitor"</span></pre>
+    </div>
+
+    <div class="info-card">
+      <h2><span>✨</span> 接入说明</h2>
+      <div class="info-list">
+        <div class="info-item">引入 SDK 脚本后，浮窗将自动出现在页面右下角</div>
+        <div class="info-item">访客点击浮窗即可发起在线咨询会话</div>
+        <div class="info-item">支持文本、图片、语音、文件等多种消息类型</div>
+        <div class="info-item">可自定义浮窗样式、位置和欢迎语</div>
+      </div>
+    </div>
+
+    <div class="cta-hint">
+      <p>👆 看右下角，浮窗已就绪！</p>
+    </div>
+
+    <footer>
+      <p>© 2024 零点客服 · 商业级客服解决方案</p>
+    </footer>
+  </div>
+
+  <script
+    type="module"
+    src="widget.min.js"
+    data-kefu-appid="demo_kefu_app"
+    data-kefu-user-id="u_demo_visitor"
+    defer
+  ></script>
+
+  <script type="module" src="i18n.js"></script>
+</body>
+</html>

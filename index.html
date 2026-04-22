@@ -1,0 +1,885 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>零点智能客服系统 - 企业级客服解决方案</title>
+    <!-- Tailwind CSS (Development Only) -->
+    <!-- For production, please install Tailwind CSS as a PostCSS plugin or use the Tailwind CLI -->
+    <!-- https://tailwindcss.com/docs/installation -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css"
+      rel="stylesheet"
+    />
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: "#3b82f6",
+              secondary: "#1e40af",
+              accent: "#60a5fa",
+              neutral: "#f3f4f6",
+              dark: "#1f2937",
+            },
+            fontFamily: {
+              sans: [
+                "-apple-system",
+                "BlinkMacSystemFont",
+                "Segoe UI",
+                "PingFang SC",
+                "Hiragino Sans GB",
+                "Microsoft YaHei",
+                "Helvetica Neue",
+                "Helvetica",
+                "Arial",
+                "sans-serif",
+              ],
+            },
+          },
+        },
+      };
+    </script>
+    <style type="text/tailwindcss">
+      @layer utilities {
+        .content-auto {
+          content-visibility: auto;
+        }
+        .text-shadow {
+          text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .bg-gradient-primary {
+          background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+        }
+        .transition-all-300 {
+          transition: all 0.3s ease;
+        }
+      }
+    </style>
+  </head>
+  <body class="font-sans text-dark bg-white">
+    <!-- 导航栏 -->
+    <header class="fixed top-0 left-0 right-0 bg-white shadow-md z-50">
+      <nav
+        class="container mx-auto px-4 py-4 flex justify-between items-center"
+      >
+        <div class="flex items-center space-x-2">
+          <div
+            class="w-10 h-10 bg-gradient-primary rounded-lg flex items-center justify-center"
+          >
+            <i class="fa fa-comments text-white text-xl"></i>
+          </div>
+          <span class="text-xl font-bold text-primary">零点智能客服系统</span>
+        </div>
+        <div class="hidden md:flex items-center space-x-8">
+          <a
+            href="#features"
+            class="text-gray-600 hover:text-primary transition-all-300"
+            >核心功能</a
+          >
+          <a
+            href="#deploy"
+            class="text-gray-600 hover:text-primary transition-all-300"
+            >快速部署</a
+          >
+          <a
+            href="#business"
+            class="text-gray-600 hover:text-primary transition-all-300"
+            >价格方案</a
+          >
+          <a
+            href="#cases"
+            class="text-gray-600 hover:text-primary transition-all-300"
+            >客户案例</a
+          >
+        </div>
+        <div class="flex items-center space-x-4">
+          <a
+            href="#contact"
+            class="px-6 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-all-300"
+            >免费试用</a
+          >
+          <button class="md:hidden text-gray-600 focus:outline-none">
+            <i class="fa fa-bars text-xl"></i>
+          </button>
+        </div>
+      </nav>
+    </header>
+
+    <!-- 英雄区域 -->
+    <section class="pt-32 pb-20 bg-gradient-to-br from-blue-50 to-indigo-50">
+      <div class="container mx-auto px-4">
+        <div class="flex flex-col md:flex-row items-center">
+          <div class="md:w-1/2 mb-10 md:mb-0">
+            <h1
+              class="text-4xl md:text-5xl lg:text-6xl font-bold text-dark mb-6 leading-tight"
+            >
+              零点智能客服系统<br />
+              <span class="text-primary">5分钟快速接入</span>
+            </h1>
+            <p class="text-lg text-gray-600 mb-8 leading-relaxed">
+              前端一行代码接入，后端零依赖部署。无需数据库，1核1GB即可运行，
+              让您的客服系统快速上线，专注业务增长。
+            </p>
+            <div
+              class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4"
+            >
+              <a
+                href="#features"
+                class="px-8 py-3 bg-primary text-white rounded-lg hover:bg-secondary transition-all-300 text-center font-medium"
+              >
+                了解功能
+              </a>
+              <a
+                href="#contact"
+                class="px-8 py-3 bg-white text-primary border border-primary rounded-lg hover:bg-gray-50 transition-all-300 text-center font-medium"
+              >
+                咨询合作
+              </a>
+            </div>
+          </div>
+          <div class="md:w-1/2">
+            <div
+              class="w-full h-80 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 rounded-xl shadow-xl flex items-center justify-center relative overflow-hidden"
+            >
+              <!-- 装饰元素 -->
+              <div class="absolute inset-0 opacity-10">
+                <div
+                  class="absolute top-10 left-10 w-20 h-20 rounded-full bg-white"
+                ></div>
+                <div
+                  class="absolute bottom-10 right-10 w-32 h-32 rounded-full bg-white"
+                ></div>
+                <div
+                  class="absolute top-1/2 left-1/4 w-16 h-16 rounded-full bg-white"
+                ></div>
+              </div>
+              <div class="text-center text-white relative z-10">
+                <i class="fa fa-comments text-6xl mb-4 animate-pulse"></i>
+                <h3 class="text-2xl font-bold mb-2">零点智能客服系统</h3>
+                <p class="mt-2 text-blue-100">简单 · 快速 · 高效</p>
+                <div class="mt-6 flex justify-center space-x-4">
+                  <div class="bg-white bg-opacity-20 px-4 py-2 rounded-lg">
+                    <i class="fa fa-bolt mr-2"></i>一键部署
+                  </div>
+                  <div class="bg-white bg-opacity-20 px-4 py-2 rounded-lg">
+                    <i class="fa fa-code mr-2"></i>一行代码
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 功能特点 -->
+    <section id="features" class="py-20 bg-white">
+      <div class="container mx-auto px-4">
+        <div class="text-center mb-16">
+          <h2 class="text-3xl md:text-4xl font-bold text-dark mb-4">
+            核心功能
+          </h2>
+          <p class="text-lg text-gray-600 max-w-3xl mx-auto">
+            功能完备，开箱即用，满足企业客服全场景需求
+          </p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <!-- 功能1 -->
+          <div
+            class="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-all-300"
+          >
+            <div
+              class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-6"
+            >
+              <i class="fa fa-comments text-primary text-2xl"></i>
+            </div>
+            <h3 class="text-xl font-bold text-dark mb-4">实时聊天</h3>
+            <p class="text-gray-600 mb-4">
+              实时聊天功能，支持客服与访客之间的即时沟通，提升沟通效率
+            </p>
+            <ul class="text-gray-600 space-y-2">
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-2"></i>即时消息传递
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-2"></i>聊天记录自动存储
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-2"></i>消息状态实时显示
+              </li>
+            </ul>
+          </div>
+          <!-- 功能2 -->
+          <div
+            class="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-all-300"
+          >
+            <div
+              class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-6"
+            >
+              <i class="fa fa-users text-primary text-2xl"></i>
+            </div>
+            <h3 class="text-xl font-bold text-dark mb-4">访客管理</h3>
+            <p class="text-gray-600 mb-4">
+              管理网站访客信息，包括访客状态、历史记录和实时监控
+            </p>
+            <ul class="text-gray-600 space-y-2">
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-2"></i>访客信息记录
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-2"></i>实时状态监控
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-2"></i>历史记录查询
+              </li>
+            </ul>
+          </div>
+          <!-- 功能3 -->
+          <div
+            class="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-all-300"
+          >
+            <div
+              class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-6"
+            >
+              <i class="fa fa-id-badge text-primary text-2xl"></i>
+            </div>
+            <h3 class="text-xl font-bold text-dark mb-4">客服管理</h3>
+            <p class="text-gray-600 mb-4">
+              管理客服人员信息，包括在线状态、工作统计和权限控制
+            </p>
+            <ul class="text-gray-600 space-y-2">
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-2"></i>客服状态管理
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-2"></i>工作统计分析
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-2"></i>权限控制
+              </li>
+            </ul>
+          </div>
+          <!-- 功能4 -->
+          <div
+            class="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-all-300"
+          >
+            <div
+              class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-6"
+            >
+              <i class="fa fa-file-text-o text-primary text-2xl"></i>
+            </div>
+            <h3 class="text-xl font-bold text-dark mb-4">快捷回复</h3>
+            <p class="text-gray-600 mb-4">
+              支持客服设置和使用快捷回复模板，提高回复效率和一致性
+            </p>
+            <ul class="text-gray-600 space-y-2">
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-2"></i>模板管理
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-2"></i>快速调用
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-2"></i>个性化设置
+              </li>
+            </ul>
+          </div>
+          <!-- 功能5 -->
+          <div
+            class="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-all-300"
+          >
+            <div
+              class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-6"
+            >
+              <i class="fa fa-mobile text-primary text-2xl"></i>
+            </div>
+            <h3 class="text-xl font-bold text-dark mb-4">多渠道接入</h3>
+            <p class="text-gray-600 mb-4">
+              支持网站、APP等多种渠道接入，提供统一的客服界面
+            </p>
+            <ul class="text-gray-600 space-y-2">
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-2"></i>网站嵌入
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-2"></i>APP集成
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-2"></i>统一管理
+              </li>
+            </ul>
+          </div>
+          <!-- 功能6 -->
+          <div
+            class="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-all-300"
+          >
+            <div
+              class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-6"
+            >
+              <i class="fa fa-database text-primary text-2xl"></i>
+            </div>
+            <h3 class="text-xl font-bold text-dark mb-4">数据管理</h3>
+            <p class="text-gray-600 mb-4">
+              安全可靠的数据管理系统，确保聊天记录和客户信息的安全存储
+            </p>
+            <ul class="text-gray-600 space-y-2">
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-2"></i>安全数据存储
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-2"></i>自动数据备份
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-2"></i>数据查询分析
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 快速部署 -->
+    <section
+      id="deploy"
+      class="py-20 bg-gradient-to-br from-indigo-50 to-blue-50"
+    >
+      <div class="container mx-auto px-4">
+        <div class="text-center mb-16">
+          <h2 class="text-3xl md:text-4xl font-bold text-dark mb-4">
+            极简部署，5分钟上线
+          </h2>
+          <p class="text-lg text-gray-600 max-w-3xl mx-auto">
+            告别复杂配置，前端一行代码接入，后端零依赖运行
+          </p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+          <div class="space-y-8">
+            <div
+              class="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-all-300"
+            >
+              <div class="flex items-start">
+                <div
+                  class="w-14 h-14 bg-gradient-primary rounded-lg flex items-center justify-center mr-6 flex-shrink-0"
+                >
+                  <i class="fa fa-code text-white text-2xl"></i>
+                </div>
+                <div>
+                  <h3 class="text-xl font-bold text-dark mb-3">
+                    前端一行代码接入
+                  </h3>
+                  <p class="text-gray-600 mb-4">
+                    无需复杂配置，在您的网站添加一行代码即可集成客服功能
+                  </p>
+                  <div
+                    class="bg-gray-900 rounded-lg p-4 text-sm text-green-400 font-mono"
+                  >
+                    &lt;script
+                    src="https://your-domain.com/widget.js"&gt;&lt;/script&gt;
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div
+              class="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-all-300"
+            >
+              <div class="flex items-start">
+                <div
+                  class="w-14 h-14 bg-gradient-primary rounded-lg flex items-center justify-center mr-6 flex-shrink-0"
+                >
+                  <i class="fa fa-bolt text-white text-2xl"></i>
+                </div>
+                <div>
+                  <h3 class="text-xl font-bold text-dark mb-3">
+                    后端零依赖部署
+                  </h3>
+                  <p class="text-gray-600 mb-4">
+                    独立二进制程序，无需数据库，无需环境配置，下载即用
+                  </p>
+                  <div
+                    class="bg-gray-900 rounded-lg p-4 text-sm text-green-400 font-mono"
+                  >
+                    ./kefu-server --port=8080
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="bg-white rounded-xl shadow-lg p-8">
+            <h3 class="text-2xl font-bold text-dark mb-6 text-center">
+              三步完成部署
+            </h3>
+            <div class="space-y-6">
+              <div class="flex items-start">
+                <div
+                  class="w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center font-bold mr-4 flex-shrink-0"
+                >
+                  1
+                </div>
+                <div>
+                  <h4 class="text-lg font-bold text-dark mb-2">下载服务端</h4>
+                  <p class="text-gray-600">
+                    获取 Linux 二进制文件，支持主流发行版
+                  </p>
+                </div>
+              </div>
+              <div class="flex items-start">
+                <div
+                  class="w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center font-bold mr-4 flex-shrink-0"
+                >
+                  2
+                </div>
+                <div>
+                  <h4 class="text-lg font-bold text-dark mb-2">启动服务</h4>
+                  <p class="text-gray-600">
+                    直接运行，无需数据库，无需配置环境
+                  </p>
+                </div>
+              </div>
+              <div class="flex items-start">
+                <div
+                  class="w-10 h-10 bg-primary text-white rounded-full flex items-center justify-center font-bold mr-4 flex-shrink-0"
+                >
+                  3
+                </div>
+                <div>
+                  <h4 class="text-lg font-bold text-dark mb-2">前端接入</h4>
+                  <p class="text-gray-600">添加一行代码，即刻开始使用</p>
+                </div>
+              </div>
+            </div>
+            <div
+              class="mt-8 p-6 bg-blue-50 rounded-lg border-l-4 border-primary"
+            >
+              <p class="text-gray-700 font-medium mb-2">
+                <i class="fa fa-clock-o text-primary mr-2"></i>
+                从下载到上线，仅需 5 分钟
+              </p>
+              <p class="text-gray-700 font-medium">
+                <i class="fa fa-server text-primary mr-2"></i>
+                最低配置：1核 1GB 内存
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 价格方案 -->
+    <section
+      id="business"
+      class="py-20 bg-gradient-to-br from-blue-50 to-indigo-50"
+    >
+      <div class="container mx-auto px-4">
+        <div class="text-center mb-16">
+          <h2 class="text-3xl md:text-4xl font-bold text-dark mb-4">
+            价格方案
+          </h2>
+          <p class="text-lg text-gray-600 max-w-3xl mx-auto">
+            灵活部署，按需选择，满足不同企业需求
+          </p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <!-- 方案1 -->
+          <div
+            class="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-all-300"
+          >
+            <div class="text-center mb-6">
+              <h3 class="text-xl font-bold text-dark mb-2">云托管版</h3>
+              <div class="text-3xl font-bold text-primary mb-2">
+                ¥1000<span class="text-sm font-normal text-gray-500">/年</span>
+              </div>
+              <p class="text-gray-600">快速上线，无需运维</p>
+            </div>
+            <ul class="space-y-3 mb-8">
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-3"></i>独立虚拟机部署
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-3"></i>数据隔离存储
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-3"></i>数据加密保护
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-3"></i>提供子域名
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-3"></i>聊天记录保留3个月
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-3"></i>存储空间100GB
+              </li>
+            </ul>
+            <a
+              href="#contact"
+              class="block text-center px-6 py-3 border border-primary text-primary rounded-lg hover:bg-primary hover:text-white transition-all-300 font-medium"
+            >
+              立即试用
+            </a>
+          </div>
+          <!-- 方案2 -->
+          <div
+            class="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-all-300 transform scale-105 z-10"
+          >
+            <div
+              class="absolute top-0 right-0 bg-primary text-white px-4 py-1 rounded-bl-lg rounded-tr-xl"
+            >
+              推荐
+            </div>
+            <div class="text-center mb-6">
+              <h3 class="text-xl font-bold text-dark mb-2">私有部署版</h3>
+              <div class="text-3xl font-bold text-primary mb-2">
+                ¥1000<span class="text-sm font-normal text-gray-500">/年</span>
+              </div>
+              <p class="text-gray-600">源码授权，自主掌控</p>
+            </div>
+            <ul class="space-y-3 mb-8">
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-3"></i>源代码授权
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-3"></i>客户自备服务器
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-3"></i>客户自备域名
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-3"></i>客户自备SSL证书
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-3"></i>协助部署调试
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-3"></i>性能无限制
+              </li>
+            </ul>
+            <a
+              href="#contact"
+              class="block text-center px-6 py-3 bg-primary text-white rounded-lg hover:bg-secondary transition-all-300 font-medium"
+            >
+              立即试用
+            </a>
+          </div>
+          <!-- 方案3 -->
+          <div
+            class="bg-white rounded-xl shadow-lg p-8 hover:shadow-xl transition-all-300"
+          >
+            <div class="text-center mb-6">
+              <h3 class="text-xl font-bold text-dark mb-2">企业定制版</h3>
+              <div class="text-3xl font-bold text-primary mb-2">
+                面议<span class="text-sm font-normal text-gray-500"></span>
+              </div>
+              <p class="text-gray-600">专属定制，满足特殊需求</p>
+            </div>
+            <ul class="space-y-3 mb-8">
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-3"></i>需求深度分析
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-3"></i>定制功能开发
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-3"></i>专属技术团队
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-3"></i>一对一服务
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-3"></i>持续技术支持
+              </li>
+              <li class="flex items-center">
+                <i class="fa fa-check text-green-500 mr-3"></i>灵活交付方式
+              </li>
+            </ul>
+            <a
+              href="#contact"
+              class="block text-center px-6 py-3 border border-primary text-primary rounded-lg hover:bg-primary hover:text-white transition-all-300 font-medium"
+            >
+              咨询洽谈
+            </a>
+          </div>
+        </div>
+        <div class="mt-16 bg-white rounded-xl shadow-lg p-8">
+          <div class="flex flex-col md:flex-row items-center">
+            <div class="md:w-2/3 mb-6 md:mb-0 md:pr-8">
+              <h3 class="text-2xl font-bold text-dark mb-4">方案对比</h3>
+              <p class="text-gray-600 mb-4">
+                根据您的实际情况，选择最适合的部署方式
+              </p>
+              <ul class="text-gray-600 space-y-2">
+                <li class="flex items-center">
+                  <i class="fa fa-cloud text-primary mr-3"></i
+                  >云托管版：我们负责运维，您专注业务
+                </li>
+                <li class="flex items-center">
+                  <i class="fa fa-server text-primary mr-3"></i
+                  >私有部署版：自主掌控数据，性能无上限
+                </li>
+                <li class="flex items-center">
+                  <i class="fa fa-building text-primary mr-3"></i
+                  >企业定制版：量身定制，满足特殊需求
+                </li>
+              </ul>
+            </div>
+            <div class="md:w-1/3">
+              <div
+                class="w-full h-64 bg-gradient-to-br from-teal-400 via-blue-500 to-indigo-600 rounded-lg shadow-md flex items-center justify-center relative overflow-hidden"
+              >
+                <!-- 装饰元素 -->
+                <div class="absolute inset-0 opacity-10">
+                  <div
+                    class="absolute top-8 left-8 w-16 h-16 rounded-full bg-white"
+                  ></div>
+                  <div
+                    class="absolute bottom-8 right-8 w-24 h-24 rounded-full bg-white"
+                  ></div>
+                </div>
+                <div class="text-center text-white relative z-10">
+                  <i class="fa fa-rocket text-5xl mb-4 animate-pulse"></i>
+                  <h4 class="text-xl font-bold mb-2">立即开始</h4>
+                  <p class="text-sm text-blue-100">选择适合您的方案</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-8 bg-blue-50 rounded-xl p-6 border-l-4 border-primary">
+          <p class="text-gray-700 font-medium mb-4">
+            <i class="fa fa-info-circle text-primary mr-2"></i>
+            版本迭代说明
+          </p>
+          <ul class="space-y-2 text-gray-700">
+            <li class="flex items-start">
+              <i class="fa fa-check-circle text-green-500 mr-2 mt-1"></i>
+              <span>云托管版：自动享受所有版本迭代和新功能</span>
+            </li>
+            <li class="flex items-start">
+              <i class="fa fa-info-circle text-primary mr-2 mt-1"></i>
+              <span
+                >私有部署版：续约期间可享受版本升级，不续约则无法获得新版本功能</span
+              >
+            </li>
+          </ul>
+        </div>
+        <div class="mt-4 bg-blue-50 rounded-xl p-6 border-l-4 border-primary">
+          <p class="text-gray-700 font-medium mb-2">
+            <i class="fa fa-info-circle text-primary mr-2"></i>
+            私有部署版说明：首年费用包含源代码授权和技术支持，次年如无需技术支持可不再续费，系统可继续使用
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 客户案例 -->
+    <section id="cases" class="py-20 bg-white">
+      <div class="container mx-auto px-4">
+        <div class="text-center mb-16">
+          <h2 class="text-3xl md:text-4xl font-bold text-dark mb-4">
+            客户案例
+          </h2>
+          <p class="text-lg text-gray-600 max-w-3xl mx-auto">
+            已有众多企业通过零点客服提升服务质量与效率
+          </p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <!-- 案例1 -->
+          <div
+            class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all-300"
+          >
+            <div
+              class="h-64 bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 flex items-center justify-center relative overflow-hidden"
+            >
+              <!-- 装饰元素 -->
+              <div class="absolute inset-0 opacity-10">
+                <div
+                  class="absolute top-8 left-8 w-16 h-16 rounded-full bg-white"
+                ></div>
+                <div
+                  class="absolute bottom-8 right-8 w-24 h-24 rounded-full bg-white"
+                ></div>
+              </div>
+              <div class="text-center text-white relative z-10">
+                <i class="fa fa-shopping-cart text-4xl mb-4 animate-pulse"></i>
+                <h3 class="text-xl font-bold mb-2">电商行业案例</h3>
+                <p class="mt-2 text-pink-100">客服效率提升40%</p>
+                <div class="mt-4 flex justify-center space-x-3">
+                  <div
+                    class="bg-white bg-opacity-20 px-3 py-1 rounded-lg text-sm"
+                  >
+                    <i class="fa fa-smile-o mr-1"></i>满意度+25%
+                  </div>
+                  <div
+                    class="bg-white bg-opacity-20 px-3 py-1 rounded-lg text-sm"
+                  >
+                    <i class="fa fa-robot mr-1"></i>60%问题自动解决
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="p-8">
+              <div class="flex items-center mb-4">
+                <div
+                  class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-4"
+                >
+                  <i class="fa fa-shopping-cart text-primary text-xl"></i>
+                </div>
+                <div>
+                  <h3 class="text-xl font-bold text-dark">某知名电商平台</h3>
+                  <p class="text-gray-600">电商行业</p>
+                </div>
+              </div>
+              <p class="text-gray-600 mb-6">
+                通过使用我们的智能客服系统，该电商平台实现了客服效率提升40%，客户满意度提高25%，
+                智能机器人解决了60%的常见问题，大大减轻了客服团队的工作压力。
+              </p>
+            </div>
+          </div>
+          <!-- 案例2 -->
+          <div
+            class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all-300"
+          >
+            <div
+              class="h-64 bg-gradient-to-br from-indigo-500 via-blue-500 to-teal-400 flex items-center justify-center relative overflow-hidden"
+            >
+              <!-- 装饰元素 -->
+              <div class="absolute inset-0 opacity-10">
+                <div
+                  class="absolute top-8 left-8 w-16 h-16 rounded-full bg-white"
+                ></div>
+                <div
+                  class="absolute bottom-8 right-8 w-24 h-24 rounded-full bg-white"
+                ></div>
+              </div>
+              <div class="text-center text-white relative z-10">
+                <i class="fa fa-bank text-4xl mb-4 animate-pulse"></i>
+                <h3 class="text-xl font-bold mb-2">金融行业案例</h3>
+                <p class="mt-2 text-blue-100">客户投诉率下降35%</p>
+                <div class="mt-4 flex justify-center space-x-3">
+                  <div
+                    class="bg-white bg-opacity-20 px-3 py-1 rounded-lg text-sm"
+                  >
+                    <i class="fa fa-clock-o mr-1"></i>响应时间-50%
+                  </div>
+                  <div
+                    class="bg-white bg-opacity-20 px-3 py-1 rounded-lg text-sm"
+                  >
+                    <i class="fa fa-star-o mr-1"></i>品牌形象提升
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="p-8">
+              <div class="flex items-center mb-4">
+                <div
+                  class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-4"
+                >
+                  <i class="fa fa-bank text-primary text-xl"></i>
+                </div>
+                <div>
+                  <h3 class="text-xl font-bold text-dark">某大型银行</h3>
+                  <p class="text-gray-600">金融行业</p>
+                </div>
+              </div>
+              <p class="text-gray-600 mb-6">
+                该银行通过集成我们的客服系统，实现了多渠道客户服务的统一管理，
+                客服响应时间缩短了50%，客户投诉率下降了35%，显著提升了品牌形象。
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 页脚 -->
+    <footer class="bg-dark text-white py-12">
+      <div class="container mx-auto px-4">
+        <div
+          class="border-t border-gray-800 mt-2 pt-2 text-center text-gray-400"
+        >
+          <p>© 2025 零点智能客服系统. 保留所有权利.</p>
+        </div>
+      </div>
+    </footer>
+
+    <!-- 回到顶部按钮 -->
+    <button
+      id="back-to-top"
+      class="fixed bottom-8 right-8 w-12 h-12 bg-primary text-white rounded-full flex items-center justify-center shadow-lg hover:bg-secondary transition-all-300 opacity-0 invisible"
+    >
+      <i class="fa fa-arrow-up"></i>
+    </button>
+
+    <script>
+      // 回到顶部按钮
+      const backToTopButton = document.getElementById("back-to-top");
+
+      window.addEventListener("scroll", () => {
+        if (window.pageYOffset > 300) {
+          backToTopButton.classList.remove("opacity-0", "invisible");
+          backToTopButton.classList.add("opacity-100", "visible");
+        } else {
+          backToTopButton.classList.remove("opacity-100", "visible");
+          backToTopButton.classList.add("opacity-0", "invisible");
+        }
+      });
+
+      backToTopButton.addEventListener("click", () => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+
+      // 平滑滚动
+      document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
+        anchor.addEventListener("click", function (e) {
+          e.preventDefault();
+          const targetId = this.getAttribute("href");
+          const targetElement = document.querySelector(targetId);
+
+          if (targetElement) {
+            window.scrollTo({
+              top: targetElement.offsetTop - 80,
+              behavior: "smooth",
+            });
+          }
+        });
+      });
+
+      // 移动端菜单
+      const menuButton = document.querySelector("button");
+      const mobileMenu = document.createElement("div");
+      mobileMenu.className =
+        "fixed inset-0 bg-white z-50 flex flex-col items-center justify-center space-y-8 text-xl transform translate-x-full transition-transform duration-300";
+      mobileMenu.innerHTML = `
+            <a href="#features" class="text-gray-600 hover:text-primary transition-all-300">核心功能</a>
+            <a href="#deploy" class="text-gray-600 hover:text-primary transition-all-300">快速部署</a>
+            <a href="#business" class="text-gray-600 hover:text-primary transition-all-300">价格方案</a>
+            <a href="#cases" class="text-gray-600 hover:text-primary transition-all-300">客户案例</a>
+            <a href="#contact" class="text-gray-600 hover:text-primary transition-all-300">联系我们</a>
+            <button class="absolute top-6 right-6 text-gray-600 focus:outline-none">
+                <i class="fa fa-times text-xl"></i>
+            </button>
+        `;
+      document.body.appendChild(mobileMenu);
+
+      if (menuButton) {
+        menuButton.addEventListener("click", () => {
+          mobileMenu.classList.remove("translate-x-full");
+        });
+      }
+
+      mobileMenu.querySelector("button").addEventListener("click", () => {
+        mobileMenu.classList.add("translate-x-full");
+      });
+
+      // 表单提交
+      document.querySelector("form").addEventListener("submit", function (e) {
+        e.preventDefault();
+        alert("感谢您的咨询，我们将尽快与您联系！");
+        this.reset();
+      });
+    </script>
+  </body>
+</html>

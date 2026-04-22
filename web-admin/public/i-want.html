@@ -1,0 +1,1026 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>我想要 - 三端客户端下载 | 零点客服</title>
+    <meta
+      name="description"
+      content="零点客服三端客户端下载页，提供 Windows / Linux / macOS 二进制安装包与接入说明。"
+    />
+    <style>
+      :root {
+        --bg: #f0f4ff;
+        --bg-card: rgba(255, 255, 255, 0.85);
+        --bg-card-solid: #ffffff;
+        --ink: #0f172a;
+        --ink-soft: #475569;
+        --ink-mute: #64748b;
+        --primary: #6366f1;
+        --primary-light: #818cf8;
+        --primary-dark: #4f46e5;
+        --accent: #06b6d4;
+        --line: rgba(99, 102, 241, 0.15);
+        --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.04);
+        --shadow-md: 0 4px 20px rgba(15, 23, 42, 0.08);
+        --shadow-lg: 0 8px 40px rgba(15, 23, 42, 0.12);
+        --shadow-glow: 0 0 60px rgba(99, 102, 241, 0.15);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        font-family:
+          "SF Pro Display",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          "PingFang SC",
+          "Microsoft YaHei",
+          sans-serif;
+        color: var(--ink);
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      body {
+        background:
+          radial-gradient(
+            ellipse 1200px 600px at 20% -10%,
+            rgba(99, 102, 241, 0.12),
+            transparent
+          ),
+          radial-gradient(
+            ellipse 800px 400px at 80% 20%,
+            rgba(6, 182, 212, 0.08),
+            transparent
+          ),
+          radial-gradient(
+            ellipse 600px 300px at 50% 100%,
+            rgba(99, 102, 241, 0.06),
+            transparent
+          ),
+          linear-gradient(180deg, #f0f4ff 0%, #f8faff 50%, #f0f4ff 100%);
+        min-height: 100vh;
+        position: relative;
+        overflow-x: hidden;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background:
+          radial-gradient(
+            ellipse 800px 800px at 10% 10%,
+            rgba(99, 102, 241, 0.04),
+            transparent
+          ),
+          radial-gradient(
+            ellipse 600px 600px at 90% 80%,
+            rgba(6, 182, 212, 0.04),
+            transparent
+          );
+        pointer-events: none;
+        z-index: -1;
+      }
+
+      body::after {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%236366f1' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        pointer-events: none;
+        z-index: -1;
+      }
+
+      .container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 24px 0;
+      }
+
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        text-decoration: none;
+        color: var(--ink);
+      }
+
+      .logo-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        background: linear-gradient(
+          135deg,
+          var(--primary),
+          var(--primary-light)
+        );
+        box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+        transition:
+          transform 0.3s,
+          box-shadow 0.3s;
+      }
+
+      .logo-icon:hover {
+        transform: translateY(-2px) scale(1.05);
+        box-shadow: 0 8px 30px rgba(99, 102, 241, 0.5);
+      }
+
+      .logo-icon::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          135deg,
+          transparent,
+          rgba(255, 255, 255, 0.2)
+        );
+      }
+
+      .logo-icon img {
+        width: 28px;
+        height: 28px;
+        object-fit: contain;
+      }
+
+      .logo-text {
+        font-size: 20px;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+        background: linear-gradient(135deg, var(--ink), var(--ink-soft));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .header-actions {
+        display: flex;
+        gap: 12px;
+      }
+
+      .btn {
+        padding: 11px 22px;
+        border-radius: 12px;
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .btn-outline {
+        background: var(--bg-card);
+        border: 1px solid var(--line);
+        color: var(--ink);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+      }
+
+      .btn-outline:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+        box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15);
+        transform: translateY(-1px);
+      }
+
+      .btn-primary {
+        background: linear-gradient(
+          135deg,
+          var(--primary),
+          var(--primary-dark)
+        );
+        color: white;
+        box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35);
+      }
+
+      .btn-primary::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          135deg,
+          transparent,
+          rgba(255, 255, 255, 0.15)
+        );
+        opacity: 0;
+        transition: opacity 0.25s;
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 30px rgba(99, 102, 241, 0.45);
+      }
+
+      .btn-primary:hover::before {
+        opacity: 1;
+      }
+
+      .hero {
+        padding: 60px 0 80px;
+        text-align: center;
+        position: relative;
+      }
+
+      .hero::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 500px;
+        height: 500px;
+        background: radial-gradient(
+          circle,
+          rgba(99, 102, 241, 0.08) 0%,
+          transparent 70%
+        );
+        pointer-events: none;
+      }
+
+      .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 20px;
+        background: linear-gradient(
+          135deg,
+          rgba(99, 102, 241, 0.1),
+          rgba(6, 182, 212, 0.1)
+        );
+        border: 1px solid rgba(99, 102, 241, 0.25);
+        border-radius: 100px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--primary);
+        margin-bottom: 28px;
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        position: relative;
+        box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15);
+      }
+
+      .hero-badge::before {
+        content: "✨";
+        font-size: 14px;
+      }
+
+      h1 {
+        font-size: clamp(36px, 5vw, 52px);
+        font-weight: 800;
+        line-height: 1.15;
+        letter-spacing: -1px;
+        margin-bottom: 20px;
+        position: relative;
+        background: linear-gradient(135deg, var(--ink), var(--ink-soft));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .hero-desc {
+        font-size: 17px;
+        color: var(--ink-soft);
+        max-width: 600px;
+        margin: 0 auto 40px;
+        line-height: 1.8;
+        position: relative;
+      }
+
+      .download-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 24px;
+        position: relative;
+      }
+
+      .dl-card {
+        background: var(--bg-card);
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        padding: 36px 28px;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: var(--shadow-md);
+        position: relative;
+        overflow: hidden;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        text-align: center;
+      }
+
+      .dl-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--primary), var(--accent));
+      }
+
+      .dl-card:hover {
+        transform: translateY(-8px);
+        box-shadow: var(--shadow-lg), var(--shadow-glow);
+        border-color: rgba(99, 102, 241, 0.35);
+      }
+
+      .dl-icon {
+        width: 88px;
+        height: 88px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 28px;
+        font-size: 42px;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+      }
+
+      .dl-card:hover .dl-icon {
+        transform: scale(1.1) translateY(-4px);
+      }
+
+      .dl-card h3 {
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--ink);
+        margin-bottom: 8px;
+      }
+
+      .dl-chip {
+        display: inline-block;
+        padding: 4px 10px;
+        background: rgba(99, 102, 241, 0.08);
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--primary);
+        margin-bottom: 12px;
+      }
+
+      .dl-meta {
+        font-size: 13px;
+        color: var(--ink-mute);
+        margin-bottom: 16px;
+        line-height: 1.6;
+      }
+
+      .dl-btn {
+        display: block;
+        padding: 12px 16px;
+        border-radius: 12px;
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+        text-align: center;
+        transition: all 0.25s;
+        margin-bottom: 10px;
+      }
+
+      .dl-btn.primary {
+        background: linear-gradient(
+          135deg,
+          var(--primary),
+          var(--primary-dark)
+        );
+        color: white;
+        box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+      }
+
+      .dl-btn.primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+      }
+
+      .dl-btn.secondary {
+        background: var(--bg-card);
+        border: 1px solid var(--line);
+        color: var(--ink);
+      }
+
+      .dl-btn.secondary:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+      }
+
+      .section {
+        padding: 60px 0;
+      }
+
+      .section-header {
+        text-align: center;
+        margin-bottom: 48px;
+        position: relative;
+      }
+
+      .section-header::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 200px;
+        height: 200px;
+        background: radial-gradient(
+          circle,
+          rgba(99, 102, 241, 0.05) 0%,
+          transparent 70%
+        );
+        pointer-events: none;
+      }
+
+      .section-header h2 {
+        font-size: 28px;
+        font-weight: 700;
+        margin-bottom: 12px;
+        position: relative;
+      }
+
+      .section-header p {
+        color: var(--ink-soft);
+        font-size: 15px;
+        position: relative;
+      }
+
+      .steps-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 24px;
+        max-width: 700px;
+        margin: 0 auto;
+      }
+
+      .step-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: var(--bg-card);
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        padding: 32px 28px;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: var(--shadow-sm);
+        position: relative;
+        overflow: hidden;
+        transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        text-align: center;
+      }
+
+      .step-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, var(--primary), var(--accent));
+      }
+
+      .step-card:hover {
+        transform: translateY(-6px);
+        box-shadow: var(--shadow-lg), var(--shadow-glow);
+        border-color: rgba(99, 102, 241, 0.25);
+      }
+
+      .step-num {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--primary), var(--accent));
+        color: white;
+        font-size: 18px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 20px;
+        box-shadow: 0 6px 20px rgba(99, 102, 241, 0.35);
+        position: relative;
+        z-index: 1;
+      }
+
+      .step-card h4 {
+        font-size: 17px;
+        font-weight: 700;
+        color: var(--ink);
+        margin-bottom: 10px;
+      }
+
+      .step-card p {
+        font-size: 14px;
+        color: var(--ink-soft);
+        line-height: 1.7;
+      }
+
+      .code-card {
+        border-radius: 20px;
+        border: 1px solid rgba(17, 27, 49, 0.8);
+        background: linear-gradient(
+          165deg,
+          #0b1220 0%,
+          #0f1e3b 40%,
+          #13294f 100%
+        );
+        box-shadow:
+          0 20px 50px rgba(9, 18, 37, 0.5),
+          inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        overflow: hidden;
+        max-width: 800px;
+        margin: 24px auto 0;
+        position: relative;
+      }
+
+      .code-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(99, 102, 241, 0.5),
+          transparent
+        );
+      }
+
+      .code-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 16px 20px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .code-title {
+        color: #93c5fd;
+        font-size: 13px;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 500;
+      }
+
+      .dots {
+        display: inline-flex;
+        gap: 6px;
+      }
+
+      .dots i {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+      }
+
+      .dots i:nth-child(1) {
+        background: #ff5f57;
+      }
+      .dots i:nth-child(2) {
+        background: #febc2e;
+      }
+      .dots i:nth-child(3) {
+        background: #28c840;
+      }
+
+      .code-body {
+        margin: 0;
+        padding: 24px 28px;
+        color: #dbeafe;
+        font:
+          14px/2 "SF Mono",
+          "Fira Code",
+          "Consolas",
+          monospace;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+
+      .tk1 {
+        color: #93c5fd;
+      }
+      .tk2 {
+        color: #fca5a5;
+      }
+      .tk3 {
+        color: #86efac;
+      }
+
+      .cta-card {
+        background: linear-gradient(
+          135deg,
+          var(--primary),
+          var(--primary-dark)
+        );
+        border-radius: 28px;
+        padding: 56px 48px;
+        box-shadow: 0 25px 80px rgba(99, 102, 241, 0.4);
+        position: relative;
+        overflow: hidden;
+        max-width: 900px;
+        margin: 0 auto;
+        text-align: center;
+      }
+
+      .cta-card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          135deg,
+          transparent,
+          rgba(255, 255, 255, 0.12)
+        );
+      }
+
+      .cta-card::after {
+        content: "";
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 100%;
+        height: 200%;
+        background: radial-gradient(
+          circle,
+          rgba(255, 255, 255, 0.15) 0%,
+          transparent 60%
+        );
+        animation: ctaGlow 4s ease-in-out infinite;
+      }
+
+      @keyframes ctaGlow {
+        0%,
+        100% {
+          opacity: 0.6;
+          transform: translate(0, 0);
+        }
+        50% {
+          opacity: 1;
+          transform: translate(-10%, 10%);
+        }
+      }
+
+      .cta-card h2 {
+        font-size: 28px;
+        font-weight: 800;
+        color: white;
+        margin-bottom: 14px;
+        position: relative;
+        letter-spacing: -0.5px;
+      }
+
+      .cta-card p {
+        color: rgba(255, 255, 255, 0.9);
+        margin-bottom: 32px;
+        font-size: 16px;
+        line-height: 1.8;
+        position: relative;
+      }
+
+      .cta-card .btn {
+        position: relative;
+      }
+
+      .cta-card .btn-outline {
+        background: white;
+        color: var(--primary);
+        border: none;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+        padding: 16px 36px;
+        font-size: 15px;
+        font-weight: 600;
+        border-radius: 14px;
+        transition: all 0.3s;
+      }
+
+      .cta-card .btn-outline:hover {
+        background: rgba(255, 255, 255, 0.95);
+        transform: translateY(-3px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+      }
+
+      .cta-buttons {
+        display: flex;
+        gap: 16px;
+        justify-content: center;
+        flex-wrap: wrap;
+        position: relative;
+      }
+
+      footer {
+        padding: 32px 0;
+        text-align: center;
+      }
+
+      footer p {
+        color: var(--ink-mute);
+        font-size: 13px;
+      }
+
+      .tip {
+        margin-top: 32px;
+        padding: 20px 24px;
+        background: linear-gradient(
+          135deg,
+          rgba(99, 102, 241, 0.08),
+          rgba(6, 182, 212, 0.05)
+        );
+        border: 1px solid rgba(99, 102, 241, 0.2);
+        border-radius: 16px;
+        font-size: 14px;
+        color: var(--ink-soft);
+        max-width: 800px;
+        margin-left: auto;
+        margin-right: auto;
+        line-height: 1.8;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .tip::before {
+        content: "💡";
+        position: absolute;
+        top: 20px;
+        left: 24px;
+        font-size: 18px;
+      }
+
+      .tip .warn {
+        color: #d97706;
+        font-weight: 600;
+      }
+      .tip .ok {
+        color: #059669;
+        font-weight: 600;
+      }
+
+      .tip span:first-child {
+        margin-left: 24px;
+      }
+
+      @keyframes float {
+        0%,
+        100% {
+          transform: translateY(0px);
+        }
+        50% {
+          transform: translateY(-8px);
+        }
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.8;
+          transform: scale(0.95);
+        }
+      }
+
+      @keyframes shimmer {
+        0% {
+          background-position: -200% 0;
+        }
+        100% {
+          background-position: 200% 0;
+        }
+      }
+
+      @keyframes gradientShift {
+        0% {
+          background-position: 0% 50%;
+        }
+        50% {
+          background-position: 100% 50%;
+        }
+        100% {
+          background-position: 0% 50%;
+        }
+      }
+
+      .dl-card {
+        animation: float 6s ease-in-out infinite;
+      }
+
+      .dl-card:nth-child(2) {
+        animation-delay: -2s;
+      }
+
+      .dl-card:nth-child(3) {
+        animation-delay: -4s;
+      }
+
+      @media (max-width: 768px) {
+        .download-grid {
+          grid-template-columns: 1fr;
+          gap: 20px;
+        }
+        .steps-grid {
+          grid-template-columns: 1fr;
+          gap: 20px;
+          max-width: 100%;
+        }
+        .cta-card {
+          padding: 40px 28px;
+          border-radius: 24px;
+        }
+        .cta-buttons {
+          flex-direction: column;
+          gap: 12px;
+        }
+        .hero {
+          padding: 40px 0 60px;
+        }
+        .hero-badge {
+          font-size: 12px;
+          padding: 8px 16px;
+        }
+        .section {
+          padding: 40px 0;
+        }
+        .section-header h2 {
+          font-size: 24px;
+        }
+        .dl-card {
+          padding: 28px 24px;
+        }
+        .dl-icon {
+          width: 72px;
+          height: 72px;
+          font-size: 36px;
+        }
+        .step-card {
+          padding: 24px 20px;
+        }
+        .step-num {
+          width: 40px;
+          height: 40px;
+          font-size: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <a href="/" class="logo">
+          <div class="logo-icon">
+            <img src="/assets/icons/logo.png" alt="logo" />
+          </div>
+          <span class="logo-text">零点客服</span>
+        </a>
+        <div class="header-actions">
+          <a href="/" class="btn btn-outline">返回首页</a>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div class="hero-badge">下载中心</div>
+        <h1>三端客户端<br />一键下载</h1>
+        <p class="hero-desc">
+          提供 Windows、Linux、macOS 三个平台的客户端下载，<br />
+          下载后直接运行即可连接客服系统，适合客服工作台或演示环境。
+        </p>
+
+        <div class="download-grid">
+          <div class="dl-card">
+            <div class="dl-icon">
+              <img src="/assets/icons/windows.svg" alt="Linux" />
+            </div>
+            <h3>Windows</h3>
+            <span class="dl-chip">x64</span>
+            <div class="dl-meta">
+              版本：v0.1.0<br />文件：kefu-windows-amd64.zip
+            </div>
+            <a class="dl-btn primary" href="/downloads/kefu-windows-amd64.zip"
+              >下载 Windows 包</a
+            >
+          </div>
+          <div class="dl-card">
+            <div class="dl-icon">
+              <img src="/assets/icons/linux.svg" alt="Linux" />
+            </div>
+            <h3>Linux</h3>
+            <span class="dl-chip">x64 / ARM64</span>
+            <div class="dl-meta">
+              版本：v0.1.0<br />文件：kefu-linux-amd64.tar.gz
+            </div>
+            <a class="dl-btn primary" href="/downloads/kefu-linux-amd64.tar.gz"
+              >下载 Linux 包</a
+            >
+          </div>
+          <div class="dl-card">
+            <div class="dl-icon">
+              <img src="/assets/icons/macos.svg" alt="Linux" />
+            </div>
+            <h3>macOS</h3>
+            <span class="dl-chip">Apple Silicon</span>
+            <div class="dl-meta">
+              版本：v0.1.0<br />文件：kefu-macos-universal.zip
+            </div>
+            <a class="dl-btn primary" href="/downloads/kefu-macos-universal.zip"
+              >下载 macOS 包</a
+            >
+          </div>
+        </div>
+      </section>
+
+      <div class="tip">
+        <span class="warn">说明：</span
+        >当前为示例下载链接，实际部署时请替换为真实下载地址。<span class="ok"
+          >推荐</span
+        >使用 `/downloads/*` 路径或 GitHub Releases 链接。
+      </div>
+
+      <section class="section">
+        <div class="section-header">
+          <h2>二步接入业务系统</h2>
+          <p>为 App 或网页产品快速集成客服功能</p>
+        </div>
+        <div class="steps-grid">
+          <div class="step-card">
+            <div class="step-num">1</div>
+            <h4>配置 AppID，一行代码接入</h4>
+            <p>管理后台配置 AppID</p>
+          </div>
+          <div class="step-card">
+            <div class="step-num">2</div>
+            <h4>配置客服后台</h4>
+            <p>
+              在客服后台接待用户会话，配置机器人、知识库、通知策略和坐席权限
+            </p>
+          </div>
+        </div>
+
+        <div class="code-card">
+          <div class="code-head">
+            <span class="code-title">
+              <span class="dots"><i></i><i></i><i></i></span>
+              接入代码示例
+            </span>
+          </div>
+          <pre
+            class="code-body"
+          ><span class="tk3">https://your-domain</span><span class="tk1">/sdk/chat.html?appid=</span><span class="tk3">demo_kefu_app</span><span class="tk1">&userId=</span><span class="tk3">u_10086</span></pre>
+        </div>
+      </section>
+
+      <section class="cta-card">
+        <h2>立即开始部署客服系统</h2>
+        <p>
+          下载客户端用于客服工作台部署，接入 SDK
+          为用户提供客服服务，在后台配置客服流程和 AI 机器人
+        </p>
+        <div class="cta-buttons">
+          <a class="btn btn-outline" href="/login">进入后台配置</a>
+          <a class="btn btn-outline" href="/">查看产品首页</a>
+        </div>
+      </section>
+
+      <footer>
+        <p>© 2024 零点客服 · 商业级客服解决方案</p>
+        <p style="margin-top: 8px;"><a href="https://github.com/mageg-x/kefugo" target="_blank" style="color: var(--primary); text-decoration: none;">零点客服 · 轻量级客服系统 · GitHub</a></p>
+      </footer>
+    </div>
+  
+  <script type="module" src="/assets/i18n.js"></script>
+</body>
+</html>

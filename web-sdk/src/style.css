@@ -1,0 +1,140 @@
+@import "tailwindcss";
+@import "@yuandezuohua/liaokit/dist/liaokit.css";
+
+:root {
+  --kefu-primary: #3b82f6;
+  --kefu-primary-dark: #2563eb;
+  --kefu-primary-light: #60a5fa;
+  --kefu-success: #10b981;
+  --kefu-warning: #f59e0b;
+  --kefu-error: #ef4444;
+  --kefu-bg: #f8fafc;
+  --kefu-surface: #ffffff;
+  --kefu-text: #1e293b;
+  --kefu-text-secondary: #64748b;
+  --kefu-border: #e2e8f0;
+  --kefu-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --kefu-radius: 0.75rem;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #cbd5e1 0%, #94a3b8 100%);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #94a3b8 0%, #64748b 100%);
+}
+
+.kefu-widget-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--kefu-primary) 0%, var(--kefu-primary-dark) 100%);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.35);
+  transition: all 0.3s ease;
+}
+
+.kefu-widget-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 24px rgba(59, 130, 246, 0.45);
+}
+
+.kefu-widget-btn:active {
+  transform: scale(0.95);
+}
+
+.kefu-widget-panel {
+  background: var(--kefu-surface);
+  border-radius: 1rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.kefu-gradient-text {
+  background: linear-gradient(135deg, var(--kefu-primary) 0%, #8b5cf6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+@keyframes kefu-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes kefu-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes kefu-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.kefu-animate-fade-in {
+  animation: kefu-fade-in 0.25s ease-out;
+}
+
+.kefu-animate-slide-up {
+  animation: kefu-slide-up 0.3s ease-out;
+}
+
+.kefu-animate-pulse {
+  animation: kefu-pulse 2s ease-in-out infinite;
+}
+
+.liao-message-bubble-text {
+  font-size: 13px !important;
+}
+.liao-input-area-textarea{
+  font-size: 13px !important;
+  padding-top: 2px !important;
+}
