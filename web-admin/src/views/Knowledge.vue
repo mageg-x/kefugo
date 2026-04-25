@@ -256,34 +256,82 @@
     </el-dialog>
 
     <el-dialog v-model="llmDialogVisible" :title="t('pageKnowledge.dialog.modelConfig')" width="1080px" class="llm-config-dialog">
+      <div class="model-type-tabs">
+        <button
+          v-for="mt in modelTypeTabs"
+          :key="mt.key"
+          type="button"
+          class="model-type-tab"
+          :class="{ active: activeModelType === mt.key }"
+          @click="activeModelType = mt.key"
+        >
+          <span class="model-type-icon">{{ mt.icon }}</span>
+          {{ t(mt.labelKey) }}
+        </button>
+      </div>
+      <div class="model-status-cards">
+        <div v-for="mt in modelTypeTabs" :key="mt.key + '-status'" class="model-status-card" :class="{ 'has-default': getDefaultModel(mt.key) }">
+          <span class="model-status-icon">{{ mt.icon }}</span>
+          <div class="model-status-info">
+            <div class="model-status-label">{{ t(mt.labelKey) }}</div>
+            <div class="model-status-value">{{ getDefaultModel(mt.key) || t("pageKnowledge.status.modelDisabled") }}</div>
+          </div>
+          <el-tag size="small" :type="getDefaultModel(mt.key) ? 'success' : 'info'">
+            {{ getDefaultModel(mt.key) ? t("status.enabled") : t("status.disabled") }}
+          </el-tag>
+        </div>
+      </div>
       <div class="kb-toolbar">
         <el-button plain class="toolbar-btn" @click="openAPIModelForm()">+ {{ t("pageKnowledge.btn.newConfig") }}</el-button>
         <el-button plain class="toolbar-btn" @click="loadAPIModels">{{ t("action.refresh") }}</el-button>
       </div>
-      <el-table :data="apiModels" border style="width: 100%">
-        <el-table-column prop="provider" :label="t('pageKnowledge.table.provider')" min-width="100" />
-        <el-table-column prop="model_name" :label="t('pageKnowledge.table.modelName')" min-width="200" />
-        <el-table-column prop="api_key_mask" :label="t('pageKnowledge.table.apiKey')" min-width="130" />
-        <el-table-column prop="base_url" label="Base URL" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="timeout_sec" :label="t('pageKnowledge.table.timeoutSec')" width="90" />
-        <el-table-column prop="temperature" :label="t('pageKnowledge.table.temperature')" width="80" />
-        <el-table-column prop="top_p" label="TopP" width="80" />
-        <el-table-column prop="max_tokens" label="MaxTokens" width="100" />
-        <el-table-column :label="t('status.label')" width="90">
+      <el-table :data="filteredAPIModels" border style="width: 100%">
+        <el-table-column prop="name" :label="t('pageKnowledge.table.configName')" min-width="100" />
+        <el-table-column prop="provider" :label="t('pageKnowledge.table.provider')" min-width="90" />
+        <el-table-column prop="model_name" :label="t('pageKnowledge.table.modelName')" min-width="180" />
+        <el-table-column v-if="activeModelType === 'embedding'" prop="dims" label="Dims" width="70" />
+        <el-table-column v-if="activeModelType === 'embedding'" prop="top_k" label="TopK" width="70" />
+        <el-table-column v-if="activeModelType === 'rerank'" prop="top_n" label="TopN" width="70" />
+        <el-table-column prop="api_key_mask" :label="t('pageKnowledge.table.apiKey')" min-width="120" />
+        <el-table-column prop="base_url" label="Base URL" min-width="180" show-overflow-tooltip />
+        <el-table-column :label="t('pageKnowledge.table.default')" width="80">
           <template #default="{ row }">
-            <el-tag :type="Number(row.status) === 1 ? 'success' : 'info'">
+            <el-tag :type="row.is_default ? 'success' : 'info'" size="small">
+              {{ row.is_default ? t("status.enabled") : "-" }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('status.label')" width="80">
+          <template #default="{ row }">
+            <el-tag :type="Number(row.status) === 1 ? 'success' : 'info'" size="small">
               {{ Number(row.status) === 1 ? t("status.enabled") : t("status.disabled") }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column :label="t('action.actions')" width="240" fixed="right">
+        <el-table-column :label="t('action.actions')" width="320" fixed="right">
           <template #default="{ row }">
+            <el-button v-if="!row.is_default" text type="success" @click="setDefaultAPIModel(row)">{{ t("pageKnowledge.btn.setDefault") }}</el-button>
             <el-button text type="primary" @click="testAPIModel(row)">{{ t("action.test") }}</el-button>
+            <el-button v-if="activeModelType === 'embedding' && row.status === 1" text type="warning" @click="triggerRebuild(row)">{{ t("pageKnowledge.btn.rebuild") }}</el-button>
             <el-button text @click="openAPIModelForm(row)">{{ t("action.edit") }}</el-button>
             <el-button text type="danger" @click="removeAPIModel(row)">{{ t("action.delete") }}</el-button>
           </template>
         </el-table-column>
       </el-table>
+      <div v-if="rebuildTask" class="rebuild-progress">
+        <el-divider />
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-weight: 600;">{{ t("pageKnowledge.rebuild.title") }}</span>
+          <el-tag :type="rebuildTaskStatusType" size="small">{{ rebuildTask.status }}</el-tag>
+        </div>
+        <el-progress :percentage="rebuildTask.progress" :status="rebuildTaskProgressStatus" style="margin-top: 8px;" />
+        <div v-if="rebuildTask.status === 'running'" style="margin-top: 4px; font-size: 12px; color: #909399;">
+          {{ rebuildTask.done_docs }} / {{ rebuildTask.total_docs }}
+        </div>
+        <div v-if="rebuildTask.status === 'failed'" style="margin-top: 4px; font-size: 12px; color: #F56C6C;">
+          {{ rebuildTask.error_message }}
+        </div>
+      </div>
       <template #footer>
         <el-button @click="llmDialogVisible = false">{{ t("action.close") }}</el-button>
       </template>
@@ -291,15 +339,26 @@
 
     <el-dialog v-model="apiModelFormVisible" :title="apiModelForm.id ? t('pageKnowledge.dialog.editModelConfig') : t('pageKnowledge.dialog.newModelConfig')" width="620px">
       <el-form label-width="120px">
+        <el-form-item :label="t('pageKnowledge.table.modelType')">
+          <el-select v-model="apiModelForm.model_type" style="width: 100%" :disabled="!!apiModelForm.id">
+            <el-option v-for="mt in modelTypeTabs" :key="mt.key" :label="t(mt.labelKey)" :value="mt.key" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="t('pageKnowledge.table.configName')">
+          <el-input v-model="apiModelForm.name" :placeholder="t('pageKnowledge.placeholder.configName')" />
+        </el-form-item>
         <el-form-item :label="t('pageKnowledge.table.provider')">
-          <el-select v-model="apiModelForm.provider" style="width: 100%">
+          <el-select v-model="apiModelForm.provider" style="width: 100%" @change="onProviderChange">
             <el-option label="OpenAI" value="openai" />
             <el-option label="Qwen" value="qwen" />
             <el-option label="DeepSeek" value="deepseek" />
             <el-option label="Zhipu AI" value="zhipu" />
+            <el-option label="Ollama" value="ollama" />
+            <el-option v-if="apiModelForm.model_type === 'rerank'" label="Cohere" value="cohere" />
+            <el-option v-if="apiModelForm.model_type === 'rerank' || apiModelForm.model_type === 'embedding'" label="Jina" value="jina" />
           </el-select>
         </el-form-item>
-        <el-form-item :label="t('pageKnowledge.table.apiKey')">
+        <el-form-item v-if="apiModelForm.provider !== 'ollama'" :label="t('pageKnowledge.table.apiKey')">
           <el-input
             v-model="apiModelForm.api_key"
             type="password"
@@ -311,21 +370,30 @@
           </div>
         </el-form-item>
         <el-form-item label="Base URL">
-          <el-input v-model="apiModelForm.base_url" :placeholder="t('pageKnowledge.placeholder.defaultBaseURL')" />
+          <el-input v-model="apiModelForm.base_url" :placeholder="apiModelForm.provider === 'ollama' ? 'http://localhost:11434' : t('pageKnowledge.placeholder.defaultBaseURL')" />
         </el-form-item>
         <el-form-item :label="t('pageKnowledge.table.modelName')">
           <el-input v-model="apiModelForm.model_name" :placeholder="t('pageKnowledge.placeholder.modelName')" />
         </el-form-item>
-        <el-form-item :label="t('pageKnowledge.table.timeoutSec')">
+        <el-form-item v-if="apiModelForm.model_type === 'embedding'" label="Dims">
+          <el-input-number v-model="apiModelForm.dims" :min="64" :max="4096" :step="64" />
+        </el-form-item>
+        <el-form-item v-if="apiModelForm.model_type === 'embedding'" label="TopK">
+          <el-input-number v-model="apiModelForm.top_k" :min="1" :max="100" />
+        </el-form-item>
+        <el-form-item v-if="apiModelForm.model_type === 'rerank'" label="TopN">
+          <el-input-number v-model="apiModelForm.top_n" :min="1" :max="50" />
+        </el-form-item>
+        <el-form-item v-if="apiModelForm.model_type === 'chat'" :label="t('pageKnowledge.table.timeoutSec')">
           <el-input-number v-model="apiModelForm.timeout_sec" :min="10" :max="600" />
         </el-form-item>
-        <el-form-item :label="t('pageKnowledge.table.temperature')">
+        <el-form-item v-if="apiModelForm.model_type === 'chat'" :label="t('pageKnowledge.table.temperature')">
           <el-input-number v-model="apiModelForm.temperature" :min="0" :max="2" :step="0.1" />
         </el-form-item>
-        <el-form-item label="Top P">
+        <el-form-item v-if="apiModelForm.model_type === 'chat'" label="Top P">
           <el-input-number v-model="apiModelForm.top_p" :min="0.1" :max="1" :step="0.1" />
         </el-form-item>
-        <el-form-item :label="t('pageKnowledge.table.maxTokens')">
+        <el-form-item v-if="apiModelForm.model_type === 'chat'" :label="t('pageKnowledge.table.maxTokens')">
           <el-input-number v-model="apiModelForm.max_tokens" :min="64" :max="8192" :step="64" />
         </el-form-item>
         <el-form-item :label="t('status.enabled')">
@@ -391,19 +459,42 @@ const llmDialogVisible = ref(false);
 const apiModels = ref([]);
 const apiModelFormVisible = ref(false);
 const savingAPIModel = ref(false);
+const activeModelType = ref("chat");
+const rebuildTask = ref(null);
+let rebuildPollTimer = null;
+const modelTypeTabs = [
+  { key: "chat", labelKey: "pageKnowledge.modelType.chat", icon: "💬" },
+  { key: "embedding", labelKey: "pageKnowledge.modelType.embedding", icon: "🔢" },
+  { key: "rerank", labelKey: "pageKnowledge.modelType.rerank", icon: "🔄" },
+];
 const apiModelForm = ref({
   id: 0,
+  model_type: "chat",
+  name: "",
   provider: "openai",
   api_key: "",
   api_key_mask: "",
   base_url: "",
   model_name: "",
+  dims: 384,
+  top_k: 20,
+  top_n: 5,
   timeout_sec: 60,
   temperature: 0.7,
   top_p: 0.9,
   max_tokens: 512,
+  is_default: false,
   status: 1,
 });
+
+const filteredAPIModels = computed(() => {
+  return (apiModels.value || []).filter((m) => (m.model_type || "chat") === activeModelType.value);
+});
+
+function getDefaultModel(modelType) {
+  const m = (apiModels.value || []).find((m) => (m.model_type || "chat") === modelType && m.is_default && m.status === 1);
+  return m ? `${m.provider}/${m.model_name}` : "";
+}
 
 const chunkSummary = computed(() => {
   const count = chunks.value.length;
@@ -915,29 +1006,41 @@ function openAPIModelForm(item = null) {
   if (!item) {
     apiModelForm.value = {
       id: 0,
-      provider: "openai",
+      model_type: activeModelType.value,
+      name: "",
+      provider: activeModelType.value === "rerank" ? "cohere" : activeModelType.value === "embedding" ? "ollama" : "openai",
       api_key: "",
       api_key_mask: "",
-      base_url: "",
+      base_url: activeModelType.value === "embedding" ? ollamaDefaultURL : "",
       model_name: "",
+      dims: 384,
+      top_k: 20,
+      top_n: 5,
       timeout_sec: 60,
       temperature: 0.7,
       top_p: 0.9,
       max_tokens: 512,
+      is_default: false,
       status: 1,
     };
   } else {
     apiModelForm.value = {
       id: Number(item.id || 0),
+      model_type: item.model_type || "chat",
+      name: item.name || "",
       provider: item.provider || "openai",
       api_key: String(item.api_key || ""),
       api_key_mask: item.api_key_mask || "",
       base_url: item.base_url || "",
       model_name: item.model_name || "",
+      dims: Number(item.dims || 384),
+      top_k: Number(item.top_k || 20),
+      top_n: Number(item.top_n || 5),
       timeout_sec: Number(item.timeout_sec || 60),
       temperature: Number(item.temperature || 0.7),
       top_p: Number(item.top_p || 0.9),
       max_tokens: Number(item.max_tokens || 512),
+      is_default: Boolean(item.is_default),
       status: Number(item.status || 0) === 1 ? 1 : 0,
     };
     api.getAPIModel(item.id).then((resp) => {
@@ -951,21 +1054,45 @@ function openAPIModelForm(item = null) {
   apiModelFormVisible.value = true;
 }
 
+const ollamaDefaultURL = "http://localhost:11434";
+
+function onProviderChange(provider) {
+  if (provider === "ollama") {
+    if (!apiModelForm.value.base_url || apiModelForm.value.base_url === ollamaDefaultURL) {
+      apiModelForm.value.base_url = ollamaDefaultURL;
+    }
+  } else {
+    if (apiModelForm.value.base_url === ollamaDefaultURL) {
+      apiModelForm.value.base_url = "";
+    }
+  }
+}
+
 async function saveAPIModel() {
   savingAPIModel.value = true;
   try {
     const payload = {
+      model_type: String(apiModelForm.value.model_type || "chat"),
+      name: String(apiModelForm.value.name || "").trim(),
       provider: String(apiModelForm.value.provider || "").trim().toLowerCase(),
       api_key: String(apiModelForm.value.api_key || "").trim(),
       base_url: String(apiModelForm.value.base_url || "").trim(),
       model_name: String(apiModelForm.value.model_name || "").trim(),
+      dims: Number(apiModelForm.value.dims || 384),
+      top_k: Number(apiModelForm.value.top_k || 20),
+      top_n: Number(apiModelForm.value.top_n || 5),
       timeout_sec: Number(apiModelForm.value.timeout_sec || 60),
       temperature: Number(apiModelForm.value.temperature || 0.7),
       top_p: Number(apiModelForm.value.top_p || 0.9),
       max_tokens: Number(apiModelForm.value.max_tokens || 512),
+      is_default: Boolean(apiModelForm.value.is_default),
       status: Number(apiModelForm.value.status || 0) === 1 ? 1 : 0,
     };
-    if (!payload.provider || !payload.model_name || !payload.api_key) {
+    if (!payload.provider || !payload.model_name) {
+      ElMessage.warning(t("pageKnowledge.toast.modelRequiredFields"));
+      return;
+    }
+    if (payload.provider !== "ollama" && !payload.api_key) {
       ElMessage.warning(t("pageKnowledge.toast.modelRequiredFields"));
       return;
     }
@@ -997,6 +1124,16 @@ async function testAPIModel(item) {
   }
 }
 
+async function setDefaultAPIModel(item) {
+  try {
+    await api.setDefaultAPIModel(item.id);
+    ElMessage.success(t("pageKnowledge.toast.setDefaultSuccess"));
+    await loadAPIModels();
+  } catch (err) {
+    ElMessage.error(err.message || t("pageKnowledge.toast.setDefaultFailed"));
+  }
+}
+
 async function removeAPIModel(item) {
   try {
     await ElMessageBox.confirm(`${t("pageKnowledge.confirm.deleteModel")}「${item.model_name}」？`, t("pageKnowledge.confirm.title"), { type: "warning" });
@@ -1009,6 +1146,64 @@ async function removeAPIModel(item) {
     }
   }
 }
+
+async function triggerRebuild(item) {
+  try {
+    await ElMessageBox.confirm(t("pageKnowledge.confirm.rebuild"), t("pageKnowledge.confirm.title"), { type: "warning" });
+    const resp = await api.triggerRebuild(item.id);
+    rebuildTask.value = resp?.data?.data?.task || null;
+    ElMessage.success(t("pageKnowledge.toast.rebuildStarted"));
+    startRebuildPoll(item.id);
+  } catch (err) {
+    if (err !== "cancel" && err !== "close") {
+      ElMessage.error(err.message || t("pageKnowledge.toast.rebuildFailed"));
+    }
+  }
+}
+
+function startRebuildPoll(configID) {
+  stopRebuildPoll();
+  rebuildPollTimer = setInterval(async () => {
+    try {
+      const resp = await api.getRebuildStatus(configID);
+      const task = resp?.data?.data?.task;
+      if (task) {
+        rebuildTask.value = task;
+        if (task.status === "completed" || task.status === "failed") {
+          stopRebuildPoll();
+        }
+      } else {
+        stopRebuildPoll();
+      }
+    } catch {
+      stopRebuildPoll();
+    }
+  }, 2000);
+}
+
+function stopRebuildPoll() {
+  if (rebuildPollTimer) {
+    clearInterval(rebuildPollTimer);
+    rebuildPollTimer = null;
+  }
+}
+
+const rebuildTaskStatusType = computed(() => {
+  if (!rebuildTask.value) return "info";
+  const s = rebuildTask.value.status;
+  if (s === "completed") return "success";
+  if (s === "running") return "warning";
+  if (s === "failed") return "danger";
+  return "info";
+});
+
+const rebuildTaskProgressStatus = computed(() => {
+  if (!rebuildTask.value) return "";
+  const s = rebuildTask.value.status;
+  if (s === "completed") return "success";
+  if (s === "failed") return "exception";
+  return "";
+});
 
 watch(activeTab, async (tab) => {
   if (!currentBaseID.value) return;
@@ -1490,6 +1685,93 @@ onMounted(async () => {
 :deep(.llm-config-dialog .el-dialog__body) {
   padding: 24px;
   overflow: visible !important;
+}
+
+.model-type-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 0;
+}
+
+.model-type-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  color: #6b7280;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+
+.model-type-tab:hover {
+  color: #3b82f6;
+}
+
+.model-type-tab.active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+  font-weight: 600;
+}
+
+.model-type-icon {
+  font-size: 16px;
+}
+
+.model-status-cards {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.model-status-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+  transition: all 0.2s;
+}
+
+.model-status-card.has-default {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.model-status-icon {
+  font-size: 22px;
+}
+
+.model-status-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.model-status-label {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.model-status-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rebuild-progress {
+  margin-top: 8px;
 }
 
 @media (max-width: 1024px) {

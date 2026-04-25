@@ -12,11 +12,11 @@ import (
 	"unicode"
 
 	"kefu-server/models"
+	"kefu-server/service/ai/embedding"
 	"kefu-server/store"
 	"kefu-server/utils/logger"
 )
 
-// VectorHit 为向量检索统一结果结构。
 type VectorHit struct {
 	ID       string                 `json:"id"`
 	Score    float64                `json:"score"`
@@ -24,7 +24,6 @@ type VectorHit struct {
 	Content  string                 `json:"content"`
 }
 
-// VectorStore 定义可替换向量存储胶水层接口。
 type VectorStore interface {
 	Health(ctx context.Context) error
 	EnsureCollection(ctx context.Context, name string) error
@@ -39,7 +38,6 @@ var (
 	vectorStoreInst VectorStore
 )
 
-// GetVectorStore 返回全局向量存储实例。
 func GetVectorStore() VectorStore {
 	vectorStoreOnce.Do(func() {
 		vectorStoreInst = NewSQLiteVecStore()
@@ -47,11 +45,10 @@ func GetVectorStore() VectorStore {
 	return vectorStoreInst
 }
 
-// SQLiteVecStore 使用 modernc sqlite + sqlite-vec 扩展实现向量检索。
 type SQLiteVecStore struct {
-	once         sync.Once
-	ready        bool
-	lastInitErr  error
+	once        sync.Once
+	ready       bool
+	lastInitErr error
 }
 
 func NewSQLiteVecStore() *SQLiteVecStore {
@@ -67,7 +64,6 @@ func (s *SQLiteVecStore) initSchema(ctx context.Context) error {
 		return err
 	}
 
-	// 元数据表仍沿用 gorm 管理，便于回溯与调试。
 	if err := store.DB.WithContext(ctx).AutoMigrate(&models.KnowledgeVectorCollection{}, &models.KnowledgeVectorEntry{}); err != nil {
 		return err
 	}
@@ -87,10 +83,13 @@ func (s *SQLiteVecStore) initSchema(ctx context.Context) error {
 		}
 	}
 
-	// 强制启用 vec0；若不可用则直接失败，让上层明确感知“向量服务未就绪”。
 	if _, err := sqlDB.ExecContext(ctx, `CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_vec_index USING vec0(
 		vector_id TEXT PRIMARY KEY,
 		embedding float[384]
+	) WITH (
+		index_type='hnsw',
+		M=16,
+		ef_construction=200
 	)`); err != nil {
 		return fmt.Errorf("create vec0 table failed: %w", err)
 	}
@@ -162,26 +161,17 @@ func (s *SQLiteVecStore) DeleteCollection(ctx context.Context, name string) erro
 		return err
 	}
 
-	rows, err := sqlDB.QueryContext(ctx, `SELECT vector_id FROM knowledge_vec_index_meta WHERE collection = ?`, name)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	ids := make([]string, 0, 128)
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err == nil {
-			ids = append(ids, strings.TrimSpace(id))
-		}
-	}
+	vecTables := s.getAllVecTableNames(ctx, sqlDB)
+	metaTables := s.getAllMetaTableNames(ctx, sqlDB)
 
-	for _, id := range ids {
-		if _, err := sqlDB.ExecContext(ctx, `DELETE FROM knowledge_vec_index WHERE vector_id = ?`, id); err != nil {
-			return err
+	for _, vt := range vecTables {
+		ids, _ := s.getVectorIDsByCollection(ctx, sqlDB, vt, name)
+		for _, id := range ids {
+			_, _ = sqlDB.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE vector_id = ?", vt), id)
 		}
 	}
-	if _, err := sqlDB.ExecContext(ctx, `DELETE FROM knowledge_vec_index_meta WHERE collection = ?`, name); err != nil {
-		return err
+	for _, mt := range metaTables {
+		_, _ = sqlDB.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE collection = ?", mt), name)
 	}
 
 	tx := store.DB.WithContext(ctx)
@@ -212,27 +202,50 @@ func (s *SQLiteVecStore) InsertText(ctx context.Context, collection, vectorID, t
 		}
 	}
 
-	feature := textToFeatureVec(text)
-	vecLiteral := featureVecToSQLiteLiteral(feature, 384)
+	embProvider, embDims, embErr := s.getActiveEmbeddingProvider(ctx)
+	var feature []float32
+	var dims int
+
+	if embErr == nil && embProvider != nil {
+		vec, err := embProvider.GetEmbedding(ctx, text)
+		if err != nil {
+			logger.Warnf("embedding provider failed, falling back to word-hash: %v", err)
+			feature = textToFeatureVec32(text)
+			dims = 384
+		} else {
+			feature = vec
+			dims = embDims
+		}
+	} else {
+		feature = textToFeatureVec32(text)
+		dims = 384
+	}
+
+	vecTableName, metaTableName, err := s.ensureVecTable(ctx, dims)
+	if err != nil {
+		return err
+	}
+
+	vecLiteral := float32SliceToSQLiteLiteral(feature)
 
 	sqlDB, err := store.DB.DB()
 	if err != nil {
 		return err
 	}
-	if _, err := sqlDB.ExecContext(ctx, `DELETE FROM knowledge_vec_index WHERE vector_id = ?`, vectorID); err != nil {
+	if _, err := sqlDB.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE vector_id = ?", vecTableName), vectorID); err != nil {
 		return err
 	}
-	if _, err := sqlDB.ExecContext(ctx, `INSERT INTO knowledge_vec_index(vector_id, embedding) VALUES(?, vec_f32(?))`, vectorID, vecLiteral); err != nil {
+	if _, err := sqlDB.ExecContext(ctx, fmt.Sprintf("INSERT INTO %s(vector_id, embedding) VALUES(?, vec_f32(?))", vecTableName), vectorID, vecLiteral); err != nil {
 		return err
 	}
-	if _, err := sqlDB.ExecContext(ctx, `
-		INSERT INTO knowledge_vec_index_meta(vector_id, collection, metadata, content)
+	if _, err := sqlDB.ExecContext(ctx, fmt.Sprintf(`
+		INSERT INTO %s(vector_id, collection, metadata, content)
 		VALUES(?, ?, ?, ?)
 		ON CONFLICT(vector_id) DO UPDATE SET
 			collection=excluded.collection,
 			metadata=excluded.metadata,
 			content=excluded.content
-	`, vectorID, collection, metaRaw, text); err != nil {
+	`, metaTableName), vectorID, collection, metaRaw, text); err != nil {
 		return err
 	}
 
@@ -257,19 +270,28 @@ func (s *SQLiteVecStore) DeleteVector(ctx context.Context, collection, vectorID 
 	if err != nil {
 		return err
 	}
-	if _, err := sqlDB.ExecContext(ctx, `DELETE FROM knowledge_vec_index WHERE vector_id = ?`, vectorID); err != nil {
-		return err
+
+	vecTables := s.getAllVecTableNames(ctx, sqlDB)
+	metaTables := s.getAllMetaTableNames(ctx, sqlDB)
+
+	for _, vt := range vecTables {
+		_, _ = sqlDB.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE vector_id = ?", vt), vectorID)
 	}
-	if strings.TrimSpace(collection) == "" {
-		if _, err := sqlDB.ExecContext(ctx, `DELETE FROM knowledge_vec_index_meta WHERE vector_id = ?`, vectorID); err != nil {
-			return err
+
+	collection = strings.TrimSpace(collection)
+	for _, mt := range metaTables {
+		if collection == "" {
+			_, _ = sqlDB.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE vector_id = ?", mt), vectorID)
+		} else {
+			_, _ = sqlDB.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE collection = ? AND vector_id = ?", mt), collection, vectorID)
 		}
-		return store.DB.WithContext(ctx).Where("vector_id = ?", vectorID).Delete(&models.KnowledgeVectorEntry{}).Error
 	}
-	if _, err := sqlDB.ExecContext(ctx, `DELETE FROM knowledge_vec_index_meta WHERE collection = ? AND vector_id = ?`, strings.TrimSpace(collection), vectorID); err != nil {
-		return err
+
+	tx := store.DB.WithContext(ctx)
+	if collection == "" {
+		return tx.Where("vector_id = ?", vectorID).Delete(&models.KnowledgeVectorEntry{}).Error
 	}
-	return store.DB.WithContext(ctx).Where("collection = ? AND vector_id = ?", strings.TrimSpace(collection), vectorID).Delete(&models.KnowledgeVectorEntry{}).Error
+	return tx.Where("collection = ? AND vector_id = ?", collection, vectorID).Delete(&models.KnowledgeVectorEntry{}).Error
 }
 
 func (s *SQLiteVecStore) SearchText(ctx context.Context, collection, query string, topK int) ([]VectorHit, error) {
@@ -296,17 +318,41 @@ func (s *SQLiteVecStore) searchBySQLiteVec(ctx context.Context, collection, quer
 	if err != nil {
 		return nil, err
 	}
-	feature := textToFeatureVec(query)
-	vecLiteral := featureVecToSQLiteLiteral(feature, 384)
 
-	rows, err := sqlDB.QueryContext(ctx, `
+	embProvider, embDims, embErr := s.getActiveEmbeddingProvider(ctx)
+	var feature []float32
+	var dims int
+
+	if embErr == nil && embProvider != nil {
+		vec, err := embProvider.GetEmbedding(ctx, query)
+		if err != nil {
+			logger.Warnf("embedding provider failed for search, falling back to word-hash: %v", err)
+			feature = textToFeatureVec32(query)
+			dims = 384
+		} else {
+			feature = vec
+			dims = embDims
+		}
+	} else {
+		feature = textToFeatureVec32(query)
+		dims = 384
+	}
+
+	vecTableName, metaTableName, err := s.ensureVecTable(ctx, dims)
+	if err != nil {
+		return nil, err
+	}
+
+	vecLiteral := float32SliceToSQLiteLiteral(feature)
+
+	rows, err := sqlDB.QueryContext(ctx, fmt.Sprintf(`
 		SELECT m.vector_id, m.metadata, m.content, vec_distance_l2(v.embedding, vec_f32(?)) AS distance
-		FROM knowledge_vec_index v
-		JOIN knowledge_vec_index_meta m ON m.vector_id = v.vector_id
+		FROM %s v
+		JOIN %s m ON m.vector_id = v.vector_id
 		WHERE m.collection = ?
 		ORDER BY distance
 		LIMIT ?
-	`, vecLiteral, collection, topK)
+	`, vecTableName, metaTableName), vecLiteral, collection, topK)
 	if err != nil {
 		return nil, err
 	}
@@ -337,6 +383,167 @@ func (s *SQLiteVecStore) searchBySQLiteVec(ctx context.Context, collection, quer
 	return out, nil
 }
 
+func (s *SQLiteVecStore) getActiveEmbeddingProvider(ctx context.Context) (embedding.Provider, int, error) {
+	cfg, err := GetEnabledAPIModelConfigByType(string(models.AIModelTypeEmbedding))
+	if err != nil {
+		return nil, 0, err
+	}
+	provider, err := embedding.NewProvider(&cfg)
+	if err != nil {
+		return nil, 0, err
+	}
+	return provider, cfg.Dims, nil
+}
+
+func (s *SQLiteVecStore) ensureVecTable(ctx context.Context, dims int) (vecTable string, metaTable string, err error) {
+	sqlDB, err := store.DB.DB()
+	if err != nil {
+		return "", "", err
+	}
+
+	if dims == 384 {
+		return "knowledge_vec_index", "knowledge_vec_index_meta", nil
+	}
+
+	vecTable = fmt.Sprintf("knowledge_vec_%d", dims)
+	metaTable = fmt.Sprintf("knowledge_vec_%d_meta", dims)
+
+	createVec := fmt.Sprintf(`CREATE VIRTUAL TABLE IF NOT EXISTS %s USING vec0(
+		vector_id TEXT PRIMARY KEY,
+		embedding float[%d]
+	) WITH (
+		index_type='hnsw',
+		M=16,
+		ef_construction=200
+	)`, vecTable, dims)
+	if _, err := sqlDB.ExecContext(ctx, createVec); err != nil {
+		return "", "", fmt.Errorf("create vec table %s failed: %w", vecTable, err)
+	}
+
+	createMeta := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+		vector_id TEXT PRIMARY KEY,
+		collection TEXT NOT NULL,
+		metadata TEXT,
+		content TEXT
+	)`, metaTable)
+	if _, err := sqlDB.ExecContext(ctx, createMeta); err != nil {
+		return "", "", fmt.Errorf("create meta table %s failed: %w", metaTable, err)
+	}
+
+	createIdx := fmt.Sprintf(`CREATE INDEX IF NOT EXISTS idx_%s_collection ON %s(collection)`, metaTable, metaTable)
+	if _, err := sqlDB.ExecContext(ctx, createIdx); err != nil {
+		return "", "", err
+	}
+
+	var existing models.VecTable
+	result := store.DB.WithContext(ctx).Where("table_name = ?", vecTable).First(&existing)
+	if result.Error != nil {
+		cfg, _ := GetEnabledAPIModelConfigByType(string(models.AIModelTypeEmbedding))
+		configID := uint(0)
+		if cfg.ID > 0 {
+			configID = cfg.ID
+		}
+		vt := models.VecTable{
+			TableName: vecTable,
+			Dims:      dims,
+			ConfigID:  configID,
+		}
+		_ = store.DB.WithContext(ctx).Where("table_name = ?", vecTable).FirstOrCreate(&vt).Error
+	}
+
+	return vecTable, metaTable, nil
+}
+
+func (s *SQLiteVecStore) getAllVecTableNames(ctx context.Context, sqlDB *sql.DB) []string {
+	names := []string{"knowledge_vec_index"}
+	rows, err := sqlDB.QueryContext(ctx, "SELECT table_name FROM vec_tables")
+	if err != nil {
+		return names
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err == nil && name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func (s *SQLiteVecStore) getAllMetaTableNames(ctx context.Context, sqlDB *sql.DB) []string {
+	names := []string{"knowledge_vec_index_meta"}
+	rows, err := sqlDB.QueryContext(ctx, "SELECT table_name FROM vec_tables")
+	if err != nil {
+		return names
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err == nil && name != "" {
+			metaName := name + "_meta"
+			names = append(names, metaName)
+		}
+	}
+	return names
+}
+
+func (s *SQLiteVecStore) getVectorIDsByCollection(ctx context.Context, sqlDB *sql.DB, vecTable, collection string) ([]string, error) {
+	metaTable := vecTable + "_meta"
+	if vecTable == "knowledge_vec_index" {
+		metaTable = "knowledge_vec_index_meta"
+	}
+	rows, err := sqlDB.QueryContext(ctx, fmt.Sprintf("SELECT vector_id FROM %s WHERE collection = ?", metaTable), collection)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := make([]string, 0, 128)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err == nil {
+			ids = append(ids, strings.TrimSpace(id))
+		}
+	}
+	return ids, nil
+}
+
+func textToFeatureVec32(text string) []float32 {
+	m := textToFeatureVec(text)
+	if m == nil {
+		return make([]float32, 384)
+	}
+	dim := 384
+	values := make([]float64, dim)
+	for idx, v := range m {
+		if idx >= 0 && idx < dim {
+			values[idx] = v
+		}
+	}
+	norm := 0.0
+	for _, v := range values {
+		norm += v * v
+	}
+	if norm > 0 {
+		norm = math.Sqrt(norm)
+		for i := range values {
+			values[i] = values[i] / norm
+		}
+	}
+	out := make([]float32, dim)
+	for i, v := range values {
+		out[i] = float32(v)
+	}
+	return out
+}
+
+func float32SliceToSQLiteLiteral(vec []float32) string {
+	parts := make([]string, 0, len(vec))
+	for _, v := range vec {
+		parts = append(parts, strconv.FormatFloat(float64(v), 'f', 6, 64))
+	}
+	return "[" + strings.Join(parts, ",") + "]"
+}
+
 func textToFeatureVec(text string) map[int]float64 {
 	normalized := normalizeFeatureText(text)
 	if normalized == "" {
@@ -359,33 +566,6 @@ func textToFeatureVec(text string) map[int]float64 {
 		}
 	}
 	return out
-}
-
-func featureVecToSQLiteLiteral(m map[int]float64, dim int) string {
-	if dim <= 0 {
-		dim = 384
-	}
-	values := make([]float64, dim)
-	for idx, v := range m {
-		if idx >= 0 && idx < dim {
-			values[idx] = v
-		}
-	}
-	norm := 0.0
-	for _, v := range values {
-		norm += v * v
-	}
-	if norm > 0 {
-		norm = math.Sqrt(norm)
-		for i := range values {
-			values[i] = values[i] / norm
-		}
-	}
-	parts := make([]string, 0, dim)
-	for _, v := range values {
-		parts = append(parts, strconv.FormatFloat(v, 'f', 6, 64))
-	}
-	return "[" + strings.Join(parts, ",") + "]"
 }
 
 func stableFeatureIndex(token string, dim int) int {

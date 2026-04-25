@@ -15,7 +15,10 @@ import (
 	"time"
 
 	"kefu-server/models"
+	"kefu-server/service/ai/rerank"
 	"kefu-server/store"
+	"kefu-server/utils"
+	"kefu-server/utils/logger"
 )
 
 var ErrNoEnabledAPIModel = errors.New("enabled api model not found")
@@ -41,6 +44,12 @@ func normalizeAPIProvider(provider string) string {
 		return "deepseek"
 	case "zhipu":
 		return "zhipu"
+	case "ollama":
+		return "ollama"
+	case "cohere":
+		return "cohere"
+	case "jina":
+		return "jina"
 	default:
 		return ""
 	}
@@ -56,6 +65,12 @@ func defaultAPIBaseURL(provider string) string {
 		return "https://api.deepseek.com/v1"
 	case "zhipu":
 		return "https://open.bigmodel.cn/api/paas/v4"
+	case "ollama":
+		return "http://localhost:11434"
+	case "cohere":
+		return "https://api.cohere.com"
+	case "jina":
+		return "https://api.jina.ai/v1"
 	default:
 		return ""
 	}
@@ -124,7 +139,7 @@ func NewExternalLLMClient(cfg models.APIModelConfig) (*ExternalLLMClient, error)
 	if cfg.ModelName == "" {
 		return nil, fmt.Errorf("api model name is empty")
 	}
-	if cfg.APIKey == "" {
+	if cfg.Provider != "ollama" && cfg.APIKey == "" {
 		return nil, fmt.Errorf("api key is empty")
 	}
 	if cfg.BaseURL == "" {
@@ -374,18 +389,74 @@ func (c *ExternalLLMClient) GenerateStream(
 }
 
 func GetEnabledAPIModelConfig() (models.APIModelConfig, error) {
+	return GetEnabledAPIModelConfigByType(string(models.AIModelTypeChat))
+}
+
+func GetEnabledAPIModelConfigByType(modelType string) (models.APIModelConfig, error) {
 	if store.DB == nil {
 		return models.APIModelConfig{}, fmt.Errorf("database not initialized")
 	}
 	var item models.APIModelConfig
-	if err := store.DB.Where("status = ?", 1).Order("updated_at DESC").First(&item).Error; err != nil {
+	query := store.DB.Where("status = ?", 1)
+	if modelType != "" {
+		query = query.Where("model_type = ?", modelType)
+	}
+	if err := query.Order("is_default DESC, updated_at DESC").First(&item).Error; err != nil {
 		return models.APIModelConfig{}, ErrNoEnabledAPIModel
 	}
 	item = clampAPIModelConfig(item)
-	if item.Provider == "" || item.ModelName == "" || item.APIKey == "" {
+	if item.Provider == "" || item.ModelName == "" {
 		return models.APIModelConfig{}, fmt.Errorf("enabled api model invalid")
 	}
+	if item.Provider != "ollama" && item.APIKey == "" {
+		return models.APIModelConfig{}, fmt.Errorf("enabled api model invalid")
+	}
+	item.APIKey = utils.DecryptAPIKey(item.APIKey)
 	return item, nil
+}
+
+func RerankHits(ctx context.Context, query string, hits []VectorHit, topN int) []VectorHit {
+	cfg, err := GetEnabledAPIModelConfigByType(string(models.AIModelTypeRerank))
+	if err != nil {
+		return hits
+	}
+	provider, err := rerank.NewProvider(&cfg)
+	if err != nil {
+		return hits
+	}
+	if cfg.TopN > 0 {
+		topN = cfg.TopN
+	}
+	if topN <= 0 {
+		topN = 5
+	}
+	candidates := make([]rerank.Candidate, len(hits))
+	for i, h := range hits {
+		candidates[i] = rerank.Candidate{
+			ID:      h.ID,
+			Content: h.Content,
+			Score:   h.Score,
+		}
+	}
+	reranked, err := provider.Rerank(query, candidates, topN)
+	if err != nil {
+		logger.Warnf("rerank failed, using original order: %v", err)
+		return hits
+	}
+	out := make([]VectorHit, 0, len(reranked))
+	for _, r := range reranked {
+		for _, h := range hits {
+			if h.ID == r.ID {
+				h.Score = r.Score
+				out = append(out, h)
+				break
+			}
+		}
+	}
+	if len(out) == 0 {
+		return hits
+	}
+	return out
 }
 
 const (

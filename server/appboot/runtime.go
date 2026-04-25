@@ -67,6 +67,8 @@ func InitRuntime(opts Options) (*gin.Engine, *config.Config, error) {
 		&models.AuditLog{},
 		&models.SystemSetting{},
 		&models.SessionListIndex{},
+		&models.VecTable{},
+		&models.RebuildTask{},
 	); err != nil {
 		return nil, nil, fmt.Errorf("database migration failed: %w", err)
 	}

@@ -1231,6 +1231,7 @@ func (vc *VisitorController) generateAIBotAnswer(ctx context.Context, session *m
 		vdb := service.GetVectorStore()
 		hits, err := vdb.SearchText(ctx, base.Collection, question, topK)
 		if err == nil && len(hits) > 0 {
+			hits = service.RerankHits(ctx, question, hits, topK)
 			modelOverride := strings.TrimSpace(cfg.AIBotModel)
 			if modelOverride != "" {
 				if modelCfg, cfgErr := service.GetEnabledAPIModelConfig(); cfgErr == nil {

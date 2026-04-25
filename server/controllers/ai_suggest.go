@@ -116,6 +116,7 @@ func (ac *AISuggestController) Suggest(c *gin.Context) {
 		// 检索相关知识片段
 		hits, searchErr := vdb.SearchText(c.Request.Context(), base.Collection, visitorText, 5)
 		if searchErr == nil && len(hits) > 0 {
+			hits = service.RerankHits(c.Request.Context(), visitorText, hits, 5)
 			answer, _, answerErr := service.AnswerWithEnabledAPIModel(c.Request.Context(), visitorText, hits)
 			if answerErr == nil && answer != nil {
 				suggestion = strings.TrimSpace(answer.Answer)

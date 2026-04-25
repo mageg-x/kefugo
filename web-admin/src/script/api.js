@@ -368,8 +368,9 @@ class ApiService {
     return this.api.post(`/knowledge-bases/${baseID}/qa-test`, payload, { timeout: timeoutMs })
   }
 
-  async listAPIModels() {
-    return this.api.get('/admin/api-models')
+  async listAPIModels(modelType) {
+    const params = modelType ? { model_type: modelType } : {}
+    return this.api.get('/admin/api-models', { params })
   }
 
   async getAPIModel(id) {
@@ -390,6 +391,18 @@ class ApiService {
 
   async testAPIModel(id) {
     return this.api.post(`/admin/api-models/${id}/test`, {}, { timeout: 180000 })
+  }
+
+  async setDefaultAPIModel(id) {
+    return this.api.post(`/admin/api-models/${id}/set-default`)
+  }
+
+  async triggerRebuild(id) {
+    return this.api.post(`/admin/api-models/${id}/rebuild`)
+  }
+
+  async getRebuildStatus(id) {
+    return this.api.get(`/admin/api-models/${id}/rebuild`)
   }
 
   async saveKnowledgeFeedback(baseID, data) {

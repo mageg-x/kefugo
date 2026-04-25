@@ -185,6 +185,9 @@ func SetupRouter() *gin.Engine {
 				apiModels.PUT("/:id", apiModelConfigController.Update)
 				apiModels.DELETE("/:id", apiModelConfigController.Delete)
 				apiModels.POST("/:id/test", apiModelConfigController.Test)
+				apiModels.POST("/:id/set-default", apiModelConfigController.SetDefault)
+				apiModels.POST("/:id/rebuild", apiModelConfigController.TriggerRebuild)
+				apiModels.GET("/:id/rebuild", apiModelConfigController.GetRebuildStatus)
 			}
 
 			faq := auth.Group("/faq")

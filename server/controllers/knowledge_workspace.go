@@ -606,7 +606,11 @@ func (kc *KnowledgeWorkspaceController) searchBaseChunks(ctx context.Context, ba
 	if err := vdb.EnsureCollection(ctx, base.Collection); err != nil {
 		return nil, err
 	}
-	return vdb.SearchText(ctx, base.Collection, query, topK)
+	hits, err := vdb.SearchText(ctx, base.Collection, query, topK)
+	if err != nil {
+		return nil, err
+	}
+	return service.RerankHits(ctx, query, hits, topK), nil
 }
 
 // RetrieveTest 检索测试接口。
