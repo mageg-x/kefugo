@@ -209,6 +209,10 @@ export function normalizeIncomingBusinessMessage(packet) {
       name: safeString(payload.name),
       size: safeNumber(payload.size, 0),
       duration: safeNumber(payload.duration, 0),
+      from: safeString(payload.from),
+      agentName: safeString(payload.agent_name || payload.agentName),
+      fromName: safeString(payload.from_name || payload.fromName),
+      senderName: safeString(payload.sender_name || payload.senderName),
       clientId: safeString(payload.client_id || payload.clientId),
       code: safeString(payload.code),
       msgId: safeString(payload.msg_id || packet.msg_id),
@@ -235,6 +239,10 @@ function normalizeBusinessInput(messageLike = {}) {
       name: safeString(payload.name),
       size: safeNumber(payload.size, 0),
       duration: safeNumber(payload.duration, 0),
+      from: safeString(payload.from),
+      agentName: safeString(payload.agentName || payload.agent_name),
+      fromName: safeString(payload.fromName || payload.from_name),
+      senderName: safeString(payload.senderName || payload.sender_name),
       msgId: safeString(payload.msgId || payload.msg_id),
       replyTo: normalizeReplyTo(payload.replyTo || payload.reply_to),
     },
@@ -252,6 +260,19 @@ export function buildInboxUiMessageFromBusiness(messageLike = {}, options = {}) 
 
   const contentType = normalized.payload.contentType;
   const url = normalized.payload.url || normalized.payload.content;
+  const currentUserName = safeString(options.currentUserName || "").trim().toLowerCase();
+  const senderName = safeString(
+    normalized.payload.senderName || normalized.payload.fromName || normalized.payload.agentName
+  ).trim();
+  const senderKey = senderName.toLowerCase();
+  const senderType =
+    normalized.businessType === BUSINESS_MESSAGE_TYPES.SYSTEM
+      ? "system"
+      : normalized.businessType === BUSINESS_MESSAGE_TYPES.VISITOR
+        ? "visitor"
+        : senderKey && currentUserName && senderKey === currentUserName
+          ? "self"
+          : "agent";
 
   return {
     local_id: safeString(options.localId || createLocalId("in")),
@@ -270,7 +291,10 @@ export function buildInboxUiMessageFromBusiness(messageLike = {}, options = {}) 
     duration: normalized.payload.duration,
     replyTo: normalized.payload.replyTo || null,
     timestamp: normalized.timestamp,
-    isSelf: normalized.businessType === BUSINESS_MESSAGE_TYPES.AGENT,
+    from: normalized.payload.from,
+    sender_name: senderName,
+    sender_type: senderType,
+    isSelf: senderType === "self",
     sid: normalized.sid,
     status: UI_MESSAGE_STATUS.SENT,
   };
@@ -291,10 +315,12 @@ export function buildInboxUiMessageFromOutgoing(contentType, data = {}, options 
         size: payload.size,
         duration: payload.duration,
         replyTo: payload.reply_to,
+        senderName: safeString(options.currentUserName || ""),
       },
     },
     {
       localId: options.localId || createLocalId("out"),
+      currentUserName: safeString(options.currentUserName || ""),
     }
   );
 }

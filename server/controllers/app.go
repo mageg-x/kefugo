@@ -532,15 +532,7 @@ func (ac *AppController) DeleteApp(c *gin.Context) {
 		return
 	}
 
-	// 优先从 JSON body 读取，兼容历史 query 传参。
-	var req struct {
-		AppID string `json:"app_id"`
-	}
-	_ = c.ShouldBindJSON(&req)
-	appID := strings.TrimSpace(req.AppID)
-	if appID == "" {
-		appID = strings.TrimSpace(c.Query("app_id"))
-	}
+	appID := strings.TrimSpace(c.Query("app_id"))
 	if appID == "" {
 		logger.Errorf("app_id is required")
 		response.ResponseError(c, http.StatusBadRequest, response.ErrCodeAppDeleteInvalidParams)

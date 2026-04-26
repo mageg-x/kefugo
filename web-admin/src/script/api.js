@@ -109,7 +109,9 @@ class ApiService {
   }
 
   async deleteApp(appId) {
-    return this.api.post('/apps/delete', { app_id: appId })
+    return this.api.delete('/apps/delete', {
+      params: { app_id: appId }
+    })
   }
 
   // 客服管理
@@ -239,7 +241,7 @@ class ApiService {
   }
 
   async exportSessions(params) {
-    return this.api.get('/export/sessions', {
+    return this.api.get('/panel/export/sessions', {
       params,
       responseType: 'blob'
     })

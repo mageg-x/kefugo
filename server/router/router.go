@@ -115,7 +115,6 @@ func SetupRouter() *gin.Engine {
 				app.Use(middleware.RequireRoles("admin"))
 				app.POST("/create", appController.CreateApp)
 				app.PUT("/update", appController.UpdateApp)
-				app.POST("/delete", appController.DeleteApp)
 				app.DELETE("/delete", appController.DeleteApp)
 			}
 
@@ -139,7 +138,6 @@ func SetupRouter() *gin.Engine {
 			auth.PUT("/user/profile", userController.UpdateProfile)
 			auth.POST("/user/password", userController.ChangePassword)
 			auth.POST("/upload-auth", uploadController.Create)
-			auth.GET("/export/sessions", middleware.RequireRoles("admin"), adminPanelController.ExportSessions)
 			auth.GET("/agent/settings", middleware.RequireRoles("agent", "admin"), agentSettingController.Get)
 			auth.PUT("/agent/settings", middleware.RequireRoles("agent", "admin"), agentSettingController.Update)
 			auth.GET("/agent/ai-bot-settings", middleware.RequireRoles("agent", "admin"), adminPanelController.GetAgentAIBotSettings)

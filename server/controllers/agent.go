@@ -63,24 +63,6 @@ func registerAgentConn(agentID string, conn *AgentConn) {
 	logger.Infof("agent conn registered agent_id=%s conn_ptr=%p", agentID, conn)
 }
 
-// unregisterAgentConn 注销指定客服的所有WebSocket连接
-// 通常在客服登出或被删除时调用，清除该客服的所有连接
-func unregisterAgentConn(agentID string) {
-	agentConns.mu.Lock()
-	defer agentConns.mu.Unlock()
-	connSet, ok := agentConns.conns[agentID]
-	if !ok {
-		logger.Debugf("agent conn unregister skipped: not found agent_id=%s", agentID)
-		return
-	}
-	// 关闭所有连接并从映射表中删除
-	for conn := range connSet {
-		delete(connSet, conn)
-	}
-	delete(agentConns.conns, agentID)
-	logger.Infof("agent conn unregistered all agent_id=%s", agentID)
-}
-
 // unregisterAgentConnInstance 注销客服的单个WebSocket连接实例
 // 当客服在某个设备断开连接时调用，只删除该设备对应的连接，保留其他设备连接
 // 这是支持多设备同时在线的关键实现
