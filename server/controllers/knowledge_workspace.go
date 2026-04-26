@@ -783,13 +783,14 @@ func (kc *KnowledgeWorkspaceController) SaveFeedback(c *gin.Context) {
 
 // ValidateConnectivity 检查向量存储可用性，便于部署排障。
 func (kc *KnowledgeWorkspaceController) ValidateConnectivity(c *gin.Context) {
-	vdb := kc.buildVectorStore()
 	ctx, cancel := context.WithTimeout(context.Background(), 2500*time.Millisecond)
 	defer cancel()
-	err := vdb.Health(ctx)
-	if err != nil {
-		response.ResponseErrorWithMsg(c, http.StatusServiceUnavailable, response.ErrCodeKnowledgeVectorCollectionFailed, err.Error())
-		return
-	}
-	response.ResponseSuccess(c, gin.H{"status": "ok", "backend": "sqlite-vec"})
+	health := service.GetVectorStoreHealth(ctx)
+	response.ResponseSuccess(c, gin.H{
+		"status":  health.Status,
+		"ready":   health.Ready,
+		"backend": health.Backend,
+		"mode":    health.Mode,
+		"message": health.Message,
+	})
 }

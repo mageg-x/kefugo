@@ -16,7 +16,7 @@ cd ../web-sdk && npm install && npm run build
 ```
 2. 同步静态资源到服务端内嵌目录：
 ```bash
-cd /mnt/d/work/kefu
+cd /mnt/d/work/kefugo
 mkdir -p server/web/admin server/web/sdk
 rsync -a --delete web-admin/dist/ server/web/admin/
 rsync -a --delete web-sdk/dist/ server/web/sdk/
@@ -29,7 +29,6 @@ CGO_ENABLED=0 go run .
 
 说明：
 - 推荐使用 `go run .`，会编译当前包全部文件，最不容易踩坑。
-- `go run ./main.go` 也可运行（当前已兼容），但后续若入口拆分/多文件协作，仍建议统一用 `go run .`。
 
 可选参数：
 - `-addr`：监听地址（默认 `0.0.0.0:5300`）
@@ -40,7 +39,9 @@ CGO_ENABLED=0 go run .
 向量检索说明（单二进制）：
 - 主数据库与向量索引统一存储在 SQLite（`modernc.org/sqlite` 驱动）。
 - 当前向量层为可替换胶水层 `VectorStore`，默认后端 `SQLiteVecStore`。
-- 若运行环境不支持 `sqlite-vec` 虚表能力，会自动回退到内置文本向量近似检索，保证功能可用不中断。
+- 若运行环境不支持 `sqlite-vec` 虚表能力，知识库会进入降级检索模式：
+  - `/api/v1/knowledge-bases/healthz` 返回 `200`，`status=degraded`，便于前端显示“未就绪/降级中”而不是直接报服务宕机。
+  - 文档入库、删除、基础检索仍可工作；检索会回退到基于本地文本特征的近似匹配。
 - 推荐以 `CGO_ENABLED=0` 构建/运行，避免跨平台 `cgo` 依赖。
 
 `-data` 未指定时默认路径：
@@ -90,6 +91,7 @@ http://127.0.0.1:5500/web-sdk/chat.html?appId=demo_kefu_app&userId=u_10086
 - 管理后台：`/admin`
 - SDK 资源：`/sdk/widget.min.js`、`/sdk/chat.min.js`
 - 健康检查：`/healthz`
+- 知识库向量状态：`/api/v1/knowledge-bases/healthz`
 
 ## 产品截图
 > 文档中使用缩略宽度展示，点击图片可查看原图。
@@ -125,8 +127,8 @@ http://127.0.0.1:5500/web-sdk/chat.html?appId=demo_kefu_app&userId=u_10086
 </a>
 
 ## 更多文档
-- [PRD](/mnt/d/work/kefu/docs/PRD.md)
-- [运维手册](/mnt/d/work/kefu/docs/Operations.md)
+- [PRD](./docs/PRD.md)
+- [运维手册](./docs/Operations.md)
 
 ## 接入示例
 ```html

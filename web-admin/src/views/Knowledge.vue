@@ -55,7 +55,7 @@
       <template v-if="activeTab === 'documents'">
         <div class="kb-toolbar">
           <el-button plain class="toolbar-btn" :disabled="!canUploadDocs" :loading="kbBackendChecking" @click="pickFiles">{{ t("pageKnowledge.btn.uploadDocs") }}</el-button>
-          <el-tag size="small" :type="kbBackendReady ? 'success' : 'warning'">
+          <el-tag size="small" :type="kbBackendReady ? 'success' : (kbBackendDegraded ? 'warning' : 'danger')">
             {{ kbBackendReady ? t("pageKnowledge.status.vectorReady") : t("pageKnowledge.status.vectorNotReady") }}
           </el-tag>
           <input
@@ -442,6 +442,7 @@ const retrieveTopK = ref(5);
 const topKOptions = [1, 3, 5, 8, 10, 15, 20];
 const retrieveResults = ref([]);
 const kbBackendReady = ref(false);
+const kbBackendDegraded = ref(false);
 const kbBackendChecking = ref(false);
 
 const qaInput = ref("");
@@ -516,7 +517,7 @@ const activeAPIModelHint = computed(() => {
   return `${item.provider} · ${item.model_name}`;
 });
 
-const canUploadDocs = computed(() => Boolean(currentBaseID.value) && kbBackendReady.value && !kbBackendChecking.value);
+const canUploadDocs = computed(() => Boolean(currentBaseID.value) && (kbBackendReady.value || kbBackendDegraded.value) && !kbBackendChecking.value);
 
 function formatDateTime(value) {
   if (!value) return "-";
@@ -737,14 +738,26 @@ async function refreshKnowledgeBackendHealth(showToast = false) {
   kbBackendChecking.value = true;
   try {
     const resp = await api.checkKnowledgeBackend();
-    const ok = String(resp?.data?.data?.status || "").toLowerCase() === "ok";
+    const payload = resp?.data?.data || {};
+    const status = String(payload?.status || "").toLowerCase();
+    const ok = status === "ok" && payload?.ready !== false;
+    const degraded = status === "degraded";
+    const usable = ok || degraded;
     kbBackendReady.value = ok;
+    kbBackendDegraded.value = degraded;
     if (showToast) {
-      ElMessage.success(ok ? t("pageKnowledge.toast.vectorReady") : t("pageKnowledge.toast.vectorNotReady"));
+      if (ok) {
+        ElMessage.success(t("pageKnowledge.toast.vectorReady"));
+      } else if (degraded) {
+        ElMessage.warning(payload?.message || t("pageKnowledge.toast.vectorNotReady"));
+      } else {
+        ElMessage.warning(payload?.message || t("pageKnowledge.toast.vectorNotReady"));
+      }
     }
-    return ok;
+    return usable;
   } catch (err) {
     kbBackendReady.value = false;
+    kbBackendDegraded.value = false;
     if (showToast) {
       ElMessage.error(err.message || t("pageKnowledge.toast.vectorUnavailable"));
     }
@@ -773,7 +786,7 @@ async function loadDocuments(silent = false) {
 
 function pickFiles() {
   if (!ensureBaseID()) return;
-  if (!kbBackendReady.value) {
+  if (!kbBackendReady.value && !kbBackendDegraded.value) {
     refreshKnowledgeBackendHealth(false).then((ok) => {
       if (!ok) {
         ElMessage.error(t("pageKnowledge.toast.vectorNotReadyRetry"));
@@ -790,7 +803,7 @@ async function onFilesSelected(event) {
   const files = Array.from(event?.target?.files || []);
   if (!files.length) return;
   if (!ensureBaseID()) return;
-  if (!kbBackendReady.value) {
+  if (!kbBackendReady.value && !kbBackendDegraded.value) {
     const ok = await refreshKnowledgeBackendHealth(false);
     if (!ok) {
       ElMessage.error(t("pageKnowledge.toast.vectorNotReadyUpload"));

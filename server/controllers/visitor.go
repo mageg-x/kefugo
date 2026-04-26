@@ -1266,7 +1266,6 @@ func (vc *VisitorController) generateAIBotAnswer(ctx context.Context, session *m
 		return ""
 	}
 	appID := strings.TrimSpace(session.AppID())
-	appID = strings.TrimSpace(appID)
 	question = strings.TrimSpace(question)
 	if appID == "" || question == "" {
 		return ""

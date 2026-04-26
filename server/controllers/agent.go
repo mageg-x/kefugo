@@ -30,6 +30,8 @@ const (
 type AgentConn struct {
 	Conn     *websocket.Conn // 底层的WebSocket连接对象
 	AgentID  string          // 客服唯一标识（用户名）
+	Role     string          // 用户角色：admin/agent
+	Apps     string          // 用户可访问应用列表（JSON）
 	SendChan chan []byte     // 异步消息发送通道，writeLoop从此通道读取消息并发送给客服
 	Done     chan struct{}   // 连接生命周期管理通道，连接断开时关闭
 }
@@ -124,43 +126,13 @@ func getAgentConnSnapshotByApp(appID string) []*AgentConn {
 		return nil
 	}
 
-	userService := service.GetUserService()
-	if userService == nil {
-		logger.Errorf("agent conn snapshot by app unavailable app_id=%s", appID)
-		return nil
-	}
-
-	agentConns.mu.RLock()
-	agentIDs := make([]string, 0, len(agentConns.conns))
-	for agentID := range agentConns.conns {
-		agentIDs = append(agentIDs, agentID)
-	}
-	agentConns.mu.RUnlock()
-
-	allowed := make(map[string]struct{}, len(agentIDs))
-	for _, agentID := range agentIDs {
-		user, err := userService.GetUser(agentID)
-		if err != nil || user == nil {
-			continue
-		}
-		if isAgentForApp(user.Apps, appID) {
-			allowed[agentID] = struct{}{}
-		}
-	}
-	if len(allowed) == 0 {
-		return nil
-	}
-
 	agentConns.mu.RLock()
 	defer agentConns.mu.RUnlock()
 
 	result := make([]*AgentConn, 0, len(agentConns.conns))
-	for agentID, connSet := range agentConns.conns {
-		if _, ok := allowed[agentID]; !ok {
-			continue
-		}
+	for _, connSet := range agentConns.conns {
 		for conn := range connSet {
-			if conn != nil {
+			if conn != nil && (conn.Role == "admin" || isAgentForApp(conn.Apps, appID)) {
 				result = append(result, conn)
 			}
 		}
@@ -322,6 +294,8 @@ func (ac *AgentController) WSHandler(c *gin.Context) {
 	agentConn := &AgentConn{
 		Conn:     conn,
 		AgentID:  agentID,
+		Role:     strings.TrimSpace(agent.Role),
+		Apps:     agent.Apps,
 		SendChan: make(chan []byte, 256), // 256容量缓冲，比访客端大因为客服可能收到更多消息
 		Done:     make(chan struct{}),
 	}
@@ -385,7 +359,7 @@ func (ac *AgentController) readLoop(ctx context.Context, conn *AgentConn) {
 		sessionID := string(sessionIDBytes)
 
 		// 处理消息
-		ac.handleMessage(conn.AgentID, sessionID, req.Type, req.Payload)
+		ac.handleMessage(conn, sessionID, req.Type, req.Payload)
 	}
 }
 
@@ -434,7 +408,12 @@ func (ac *AgentController) writeLoop(ctx context.Context, conn *AgentConn) {
 // sessionID: 会话唯一标识
 // actionType: 消息类型（回复/typing/关闭）
 // payloadBytes: 消息载荷数据
-func (ac *AgentController) handleMessage(agentID, sessionID, actionType string, payloadBytes []byte) {
+func (ac *AgentController) handleMessage(conn *AgentConn, sessionID, actionType string, payloadBytes []byte) {
+	if conn == nil {
+		return
+	}
+	agentID := strings.TrimSpace(conn.AgentID)
+	isAdmin := strings.EqualFold(strings.TrimSpace(conn.Role), "admin")
 	ss := service.GetSessionService()
 	if ss == nil {
 		logger.Errorf("agent session service unavailable agent_id=%s sid=%s", agentID, sessionID)
@@ -448,8 +427,8 @@ func (ac *AgentController) handleMessage(agentID, sessionID, actionType string, 
 		return
 	}
 
-	// 安全校验：确保只有当前负责这个会话的客服才能操作
-	if session.CurAgentID != agentID {
+	// 安全校验：普通客服只能操作自己负责的会话；管理员保留特权，不接管会话。
+	if !isAdmin && session.CurAgentID != agentID {
 		logger.Errorf("agent session owner mismatch agent_id=%s sid=%s owner=%s", agentID, sessionID, session.CurAgentID)
 		return
 	}
@@ -549,6 +528,9 @@ func (ac *AgentController) handleMessage(agentID, sessionID, actionType string, 
 
 		// 推送消息给访客
 		PushMessageToVisitor(session.VisitorID(), sessionID, &msg)
+		if isAdmin && strings.TrimSpace(session.CurAgentID) != "" && session.CurAgentID != agentID {
+			PushMessageToAgent(session.CurAgentID, sessionID, &msg)
+		}
 
 	case MessageTypeAgentTyping:
 		// 客服正在输入，推送给访客
@@ -566,6 +548,9 @@ func (ac *AgentController) handleMessage(agentID, sessionID, actionType string, 
 		// 推送会话结束消息给访客和客服
 		PushMessageToVisitor(session.VisitorID(), sessionID, systemMsg)
 		PushMessageToAgent(agentID, sessionID, systemMsg)
+		if isAdmin && strings.TrimSpace(session.CurAgentID) != "" && session.CurAgentID != agentID {
+			PushMessageToAgent(session.CurAgentID, sessionID, systemMsg)
+		}
 
 	default:
 		logger.Debugf("agent action unhandled type=%s agent_id=%s sid=%s", actionType, agentID, sessionID)

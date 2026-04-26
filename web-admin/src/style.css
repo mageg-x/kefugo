@@ -34,6 +34,7 @@
   --td-chat-font-size: 13px;
   --td-font-size-body-large: 13px;
   --td-font-size-body-medium: 12px;
+  --td-chat-item-gap : 16px;
 }
 
 *::part(t-chat__item__content__slot){

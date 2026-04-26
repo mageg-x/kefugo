@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,6 +34,14 @@ type VectorStore interface {
 	SearchText(ctx context.Context, collection, query string, topK int) ([]VectorHit, error)
 }
 
+type VectorStoreHealth struct {
+	Status  string `json:"status"`
+	Ready   bool   `json:"ready"`
+	Backend string `json:"backend"`
+	Mode    string `json:"mode"`
+	Message string `json:"message,omitempty"`
+}
+
 var (
 	vectorStoreOnce sync.Once
 	vectorStoreInst VectorStore
@@ -43,6 +52,26 @@ func GetVectorStore() VectorStore {
 		vectorStoreInst = NewSQLiteVecStore()
 	})
 	return vectorStoreInst
+}
+
+func GetVectorStoreHealth(ctx context.Context) VectorStoreHealth {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	health := VectorStoreHealth{
+		Status:  "ok",
+		Ready:   true,
+		Backend: "sqlite-vec",
+		Mode:    "vector",
+	}
+	if err := GetVectorStore().Health(ctx); err != nil {
+		health.Status = "degraded"
+		health.Ready = false
+		health.Backend = "sqlite"
+		health.Mode = "fallback"
+		health.Message = err.Error()
+	}
+	return health
 }
 
 type SQLiteVecStore struct {
@@ -137,24 +166,35 @@ func (s *SQLiteVecStore) Health(ctx context.Context) error {
 }
 
 func (s *SQLiteVecStore) EnsureCollection(ctx context.Context, name string) error {
-	if err := s.Health(ctx); err != nil {
-		return err
-	}
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return fmt.Errorf("collection is empty")
+	}
+	if store.DB == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	if err := s.Health(ctx); err != nil {
+		logger.Warnf("vector store ensure collection fallback collection=%s err=%v", name, err)
 	}
 	row := models.KnowledgeVectorCollection{Name: name}
 	return store.DB.WithContext(ctx).Where("name = ?", name).FirstOrCreate(&row).Error
 }
 
 func (s *SQLiteVecStore) DeleteCollection(ctx context.Context, name string) error {
-	if err := s.Health(ctx); err != nil {
-		return err
-	}
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil
+	}
+	if store.DB == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	if err := s.Health(ctx); err != nil {
+		logger.Warnf("vector store delete collection fallback collection=%s err=%v", name, err)
+		tx := store.DB.WithContext(ctx)
+		if err := tx.Where("collection = ?", name).Delete(&models.KnowledgeVectorEntry{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("name = ?", name).Delete(&models.KnowledgeVectorCollection{}).Error
 	}
 	sqlDB, err := store.DB.DB()
 	if err != nil {
@@ -182,17 +222,14 @@ func (s *SQLiteVecStore) DeleteCollection(ctx context.Context, name string) erro
 }
 
 func (s *SQLiteVecStore) InsertText(ctx context.Context, collection, vectorID, text string, metadata map[string]interface{}) error {
-	if err := s.Health(ctx); err != nil {
-		return err
-	}
 	collection = strings.TrimSpace(collection)
 	vectorID = strings.TrimSpace(vectorID)
 	text = strings.TrimSpace(text)
 	if collection == "" || vectorID == "" || text == "" {
 		return fmt.Errorf("invalid vector input")
 	}
-	if err := s.EnsureCollection(ctx, collection); err != nil {
-		return err
+	if store.DB == nil {
+		return fmt.Errorf("database not initialized")
 	}
 
 	metaRaw := "{}"
@@ -200,6 +237,21 @@ func (s *SQLiteVecStore) InsertText(ctx context.Context, collection, vectorID, t
 		if b, err := json.Marshal(metadata); err == nil {
 			metaRaw = string(b)
 		}
+	}
+	if err := s.EnsureCollection(ctx, collection); err != nil {
+		return err
+	}
+
+	row := models.KnowledgeVectorEntry{
+		Collection: collection,
+		VectorID:   vectorID,
+		Content:    text,
+		Metadata:   metaRaw,
+	}
+
+	if err := s.Health(ctx); err != nil {
+		logger.Warnf("vector store insert fallback collection=%s vector_id=%s err=%v", collection, vectorID, err)
+		return store.DB.WithContext(ctx).Where("vector_id = ?", vectorID).Assign(row).FirstOrCreate(&row).Error
 	}
 
 	embProvider, embDims, embErr := s.getActiveEmbeddingProvider(ctx)
@@ -249,22 +301,25 @@ func (s *SQLiteVecStore) InsertText(ctx context.Context, collection, vectorID, t
 		return err
 	}
 
-	row := models.KnowledgeVectorEntry{
-		Collection: collection,
-		VectorID:   vectorID,
-		Content:    text,
-		Metadata:   metaRaw,
-	}
 	return store.DB.WithContext(ctx).Where("vector_id = ?", vectorID).Assign(row).FirstOrCreate(&row).Error
 }
 
 func (s *SQLiteVecStore) DeleteVector(ctx context.Context, collection, vectorID string) error {
-	if err := s.Health(ctx); err != nil {
-		return err
-	}
 	vectorID = strings.TrimSpace(vectorID)
 	if vectorID == "" {
 		return nil
+	}
+	collection = strings.TrimSpace(collection)
+	if store.DB == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	if err := s.Health(ctx); err != nil {
+		logger.Warnf("vector store delete vector fallback collection=%s vector_id=%s err=%v", collection, vectorID, err)
+		tx := store.DB.WithContext(ctx)
+		if collection == "" {
+			return tx.Where("vector_id = ?", vectorID).Delete(&models.KnowledgeVectorEntry{}).Error
+		}
+		return tx.Where("collection = ? AND vector_id = ?", collection, vectorID).Delete(&models.KnowledgeVectorEntry{}).Error
 	}
 	sqlDB, err := store.DB.DB()
 	if err != nil {
@@ -278,7 +333,6 @@ func (s *SQLiteVecStore) DeleteVector(ctx context.Context, collection, vectorID 
 		_, _ = sqlDB.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE vector_id = ?", vt), vectorID)
 	}
 
-	collection = strings.TrimSpace(collection)
 	for _, mt := range metaTables {
 		if collection == "" {
 			_, _ = sqlDB.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE vector_id = ?", mt), vectorID)
@@ -295,13 +349,13 @@ func (s *SQLiteVecStore) DeleteVector(ctx context.Context, collection, vectorID 
 }
 
 func (s *SQLiteVecStore) SearchText(ctx context.Context, collection, query string, topK int) ([]VectorHit, error) {
-	if err := s.Health(ctx); err != nil {
-		return nil, err
-	}
 	collection = strings.TrimSpace(collection)
 	query = strings.TrimSpace(query)
 	if collection == "" || query == "" {
 		return []VectorHit{}, nil
+	}
+	if store.DB == nil {
+		return nil, fmt.Errorf("database not initialized")
 	}
 	if topK <= 0 {
 		topK = 5
@@ -309,8 +363,66 @@ func (s *SQLiteVecStore) SearchText(ctx context.Context, collection, query strin
 	if topK > 20 {
 		topK = 20
 	}
+	if err := s.Health(ctx); err != nil {
+		logger.Warnf("vector store search fallback collection=%s err=%v", collection, err)
+		return s.searchByContentFallback(ctx, collection, query, topK)
+	}
 
 	return s.searchBySQLiteVec(ctx, collection, query, topK)
+}
+
+func (s *SQLiteVecStore) searchByContentFallback(ctx context.Context, collection, query string, topK int) ([]VectorHit, error) {
+	var rows []models.KnowledgeVectorEntry
+	if err := store.DB.WithContext(ctx).Where("collection = ?", collection).Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return []VectorHit{}, nil
+	}
+
+	queryVec := textToFeatureVec32(query)
+	type scoredHit struct {
+		hit   VectorHit
+		score float64
+	}
+	scored := make([]scoredHit, 0, len(rows))
+	for _, row := range rows {
+		content := strings.TrimSpace(row.Content)
+		if content == "" {
+			continue
+		}
+		meta := map[string]interface{}{}
+		if strings.TrimSpace(row.Metadata) != "" {
+			_ = json.Unmarshal([]byte(row.Metadata), &meta)
+		}
+		score := cosineScore32(queryVec, textToFeatureVec32(content))
+		if score <= 0 {
+			continue
+		}
+		scored = append(scored, scoredHit{
+			score: score,
+			hit: VectorHit{
+				ID:       strings.TrimSpace(row.VectorID),
+				Score:    score,
+				Metadata: meta,
+				Content:  content,
+			},
+		})
+	}
+	sort.Slice(scored, func(i, j int) bool {
+		if scored[i].score == scored[j].score {
+			return scored[i].hit.ID < scored[j].hit.ID
+		}
+		return scored[i].score > scored[j].score
+	})
+	if len(scored) > topK {
+		scored = scored[:topK]
+	}
+	out := make([]VectorHit, 0, len(scored))
+	for _, item := range scored {
+		out = append(out, item.hit)
+	}
+	return out, nil
 }
 
 func (s *SQLiteVecStore) searchBySQLiteVec(ctx context.Context, collection, query string, topK int) ([]VectorHit, error) {
@@ -542,6 +654,30 @@ func float32SliceToSQLiteLiteral(vec []float32) string {
 		parts = append(parts, strconv.FormatFloat(float64(v), 'f', 6, 64))
 	}
 	return "[" + strings.Join(parts, ",") + "]"
+}
+
+func cosineScore32(a, b []float32) float64 {
+	if len(a) == 0 || len(a) != len(b) {
+		return 0
+	}
+	dot := 0.0
+	normA := 0.0
+	normB := 0.0
+	for i := range a {
+		av := float64(a[i])
+		bv := float64(b[i])
+		dot += av * bv
+		normA += av * av
+		normB += bv * bv
+	}
+	if normA <= 0 || normB <= 0 {
+		return 0
+	}
+	score := dot / (math.Sqrt(normA) * math.Sqrt(normB))
+	if score < 0 {
+		return 0
+	}
+	return score
 }
 
 func textToFeatureVec(text string) map[int]float64 {
