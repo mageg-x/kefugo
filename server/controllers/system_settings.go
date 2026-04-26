@@ -11,71 +11,71 @@ import (
 )
 
 type systemSettings struct {
-	SystemName       string `json:"systemName"`
-	Logo             string `json:"logo"`
-	WelcomeMsg       string `json:"welcomeMsg"`
-	MaxSessions      int    `json:"maxSessions"`
-	Timeout          int    `json:"timeout"`
-	AutoAssign       bool   `json:"autoAssign"`
-	EmailNotify      bool   `json:"emailNotify"`
-	NotifyEmail      string `json:"notifyEmail"`
-	SMTPHost         string `json:"smtpHost"`
-	SMTPPort         int    `json:"smtpPort"`
-	SMTPUser         string `json:"smtpUser"`
-	SMTPPassword     string `json:"smtpPassword"`
-	SMTPFrom         string `json:"smtpFrom"`
-	SessionEncrypt   bool   `json:"sessionEncrypt"`
-	IPLimit          bool   `json:"ipLimit"`
-	IPWhitelist      string `json:"ipWhitelist"`
-	Captcha          bool   `json:"captcha"`
-	SensitiveWords   string `json:"sensitiveWords"`
-	RateLimitEnabled bool   `json:"rateLimitEnabled"`
-	RateLimitRPM     int    `json:"rateLimitRpm"`
-	RateLimitBurst   int    `json:"rateLimitBurst"`
-	OfflineNotifyURL string `json:"offlineNotifyUrl"`
-	WecomCorpID      string `json:"wecomCorpId"`
-	WecomAgentID     int    `json:"wecomAgentId"`
-	WecomSecret      string `json:"wecomSecret"`
-	AIBotEnabled     bool   `json:"aiBotEnabled"`
-	AIBotName        string `json:"aiBotName"`
-	AIBotModel       string `json:"aiBotModel"`
-	AIBotStyle       string `json:"aiBotStyle"`
-	AIBotPrompt      string `json:"aiBotPrompt"`
-	AIBotTopK        int    `json:"aiBotTopK"`
-	AIBotWhenAssigned bool  `json:"aiBotWhenAssigned"`
+	SystemName        string `json:"systemName"`
+	Logo              string `json:"logo"`
+	WelcomeMsg        string `json:"welcomeMsg"`
+	MaxSessions       int    `json:"maxSessions"`
+	Timeout           int    `json:"timeout"`
+	AutoAssign        bool   `json:"autoAssign"`
+	EmailNotify       bool   `json:"emailNotify"`
+	NotifyEmail       string `json:"notifyEmail"`
+	SMTPHost          string `json:"smtpHost"`
+	SMTPPort          int    `json:"smtpPort"`
+	SMTPUser          string `json:"smtpUser"`
+	SMTPPassword      string `json:"smtpPassword"`
+	SMTPFrom          string `json:"smtpFrom"`
+	SessionEncrypt    bool   `json:"sessionEncrypt"`
+	IPLimit           bool   `json:"ipLimit"`
+	IPWhitelist       string `json:"ipWhitelist"`
+	Captcha           bool   `json:"captcha"`
+	SensitiveWords    string `json:"sensitiveWords"`
+	RateLimitEnabled  bool   `json:"rateLimitEnabled"`
+	RateLimitRPM      int    `json:"rateLimitRpm"`
+	RateLimitBurst    int    `json:"rateLimitBurst"`
+	OfflineNotifyURL  string `json:"offlineNotifyUrl"`
+	WecomCorpID       string `json:"wecomCorpId"`
+	WecomAgentID      int    `json:"wecomAgentId"`
+	WecomSecret       string `json:"wecomSecret"`
+	AIBotEnabled      bool   `json:"aiBotEnabled"`
+	AIBotName         string `json:"aiBotName"`
+	AIBotModel        string `json:"aiBotModel"`
+	AIBotStyle        string `json:"aiBotStyle"`
+	AIBotPrompt       string `json:"aiBotPrompt"`
+	AIBotTopK         int    `json:"aiBotTopK"`
+	AIBotWhenAssigned bool   `json:"aiBotWhenAssigned"`
 }
 
 // defaultSystemSettings 返回系统设置默认值。
 func defaultSystemSettings() systemSettings {
 	return systemSettings{
-		SystemName:       "零点客服系统",
-		Logo:             "",
-		WelcomeMsg:       "您好，有什么可以帮您的吗？",
-		MaxSessions:      5,
-		Timeout:          180,
-		AutoAssign:       true,
-		EmailNotify:      false,
-		NotifyEmail:      "",
-		SMTPHost:         "",
-		SMTPPort:         25,
-		SMTPUser:         "",
-		SMTPPassword:     "",
-		SMTPFrom:         "kefu@localhost",
-		SessionEncrypt:   true,
-		IPLimit:          false,
-		IPWhitelist:      "",
-		Captcha:          false,
-		SensitiveWords:   "",
-		RateLimitEnabled: true,
-		RateLimitRPM:     120,
-		RateLimitBurst:   60,
-		OfflineNotifyURL: "",
-		AIBotEnabled:     false,
-		AIBotName:        "AI机器人",
-		AIBotModel:       "",
-		AIBotStyle:       defaultAIStyle,
-		AIBotPrompt:      "你是一名客服机器人，回答要准确、简洁、礼貌。证据不足时明确说明并建议转人工。",
-		AIBotTopK:        5,
+		SystemName:        "零点客服系统",
+		Logo:              "",
+		WelcomeMsg:        "您好，有什么可以帮您的吗？",
+		MaxSessions:       5,
+		Timeout:           180,
+		AutoAssign:        true,
+		EmailNotify:       false,
+		NotifyEmail:       "",
+		SMTPHost:          "",
+		SMTPPort:          25,
+		SMTPUser:          "",
+		SMTPPassword:      "",
+		SMTPFrom:          "kefu@localhost",
+		SessionEncrypt:    true,
+		IPLimit:           false,
+		IPWhitelist:       "",
+		Captcha:           false,
+		SensitiveWords:    "",
+		RateLimitEnabled:  true,
+		RateLimitRPM:      120,
+		RateLimitBurst:    60,
+		OfflineNotifyURL:  "",
+		AIBotEnabled:      false,
+		AIBotName:         "AI机器人",
+		AIBotModel:        "",
+		AIBotStyle:        defaultAIStyle,
+		AIBotPrompt:       "你是一名客服机器人，回答要准确、简洁、礼貌。证据不足时明确说明并建议转人工。",
+		AIBotTopK:         5,
 		AIBotWhenAssigned: false,
 	}
 }
@@ -174,6 +174,22 @@ func setSystemSettingsCache(cfg systemSettings) {
 	// 主动写缓存时直接立即生效，避免配置变更后的短暂读取延迟。
 	systemSettingsCache.expires = time.Now().Add(30 * time.Minute)
 	systemSettingsCache.mu.Unlock()
+}
+
+func saveSystemSettingsRecord(cfg systemSettings) error {
+	cfg = normalizeSystemSettings(cfg)
+	valueBytes, _ := json.Marshal(cfg)
+	var row models.SystemSetting
+	err := store.DB.Where("key = ?", "system_settings").First(&row).Error
+	if err != nil {
+		row = models.SystemSetting{
+			Key:   "system_settings",
+			Value: string(valueBytes),
+		}
+		return store.DB.Create(&row).Error
+	}
+	row.Value = string(valueBytes)
+	return store.DB.Save(&row).Error
 }
 
 // parseSensitiveWords 解析敏感词配置文本，支持多种分隔符并自动去重。

@@ -51,7 +51,6 @@ func extractKnowledgeContentFromURL(fileURL string, name string) (content string
 		}
 		content = strings.TrimSpace(t)
 	default:
-		// 非文本先按 utf8 尝试，失败则提示不支持。
 		t := string(body)
 		if !utf8.ValidString(t) {
 			return "", "", "", fmt.Errorf("file type not supported for text parsing")

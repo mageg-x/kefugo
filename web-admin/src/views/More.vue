@@ -141,96 +141,6 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="knowledgeDialogVisible" :title="t('pageMore.dialog.knowledge')" width="980px" top="6vh" class="more-dialog more-dialog-wide">
-      <div class="workspace-grid">
-        <aside class="workspace-side">
-          <div class="workspace-side-title">{{ t("pageMore.word.filterAndAction") }}</div>
-          <div class="workspace-stack">
-            <el-select v-model="knowledgeAppID" filterable :placeholder="t('pageMore.placeholder.selectApp')" @change="loadKnowledge">
-              <el-option v-for="app in appOptions" :key="app.value" :label="app.label" :value="app.value" />
-            </el-select>
-            <el-input v-model="knowledgeKeyword" :placeholder="t('pageMore.placeholder.searchKnowledge')" @keyup.enter="loadKnowledge" />
-            <div class="workspace-actions">
-              <el-button @click="loadKnowledge">{{ t("action.search") }}</el-button>
-              <el-button type="primary" @click="openKnowledgeEditor()">{{ t("action.create") }}</el-button>
-            </div>
-            <el-upload
-              :auto-upload="false"
-              :show-file-list="false"
-              :on-change="onKnowledgeFileSelected"
-              accept=".txt,.md,.csv,.json,.log,.html,.htm"
-            >
-              <template #trigger>
-                <el-button type="primary" plain>{{ t("pageMore.btn.uploadDocToKnowledge") }}</el-button>
-              </template>
-            </el-upload>
-            <p class="tip-text">{{ t("pageMore.tip.uploadTypes") }}</p>
-          </div>
-          <div class="workspace-stats">
-            <div class="workspace-stat-item">
-              <span>{{ t("pageMore.word.knowledgeItems") }}</span>
-              <strong>{{ knowledgeRows.length }}</strong>
-            </div>
-            <div class="workspace-stat-item">
-              <span>{{ t("status.enabled") }}</span>
-              <strong>{{ knowledgeEnabledCount }}</strong>
-            </div>
-          </div>
-        </aside>
-        <section class="workspace-main">
-          <el-table :data="knowledgeRows" v-loading="knowledgeLoading" border class="more-table">
-            <el-table-column prop="title" :label="t('pageMore.table.title')" min-width="220" />
-            <el-table-column prop="tags" :label="t('pageMore.table.tags')" width="120" show-overflow-tooltip />
-            <el-table-column prop="source_type" :label="t('pageMore.table.source')" width="110" />
-            <el-table-column prop="source_name" :label="t('pageMore.table.sourceFile')" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="enabled" :label="t('status.label')" width="90" align="center">
-              <template #default="{ row }">
-                <el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? t("status.enabled") : t("status.disabled") }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column :label="t('action.actions')" width="180" align="center">
-              <template #default="{ row }">
-                <el-button type="primary" link @click="openKnowledgeEditor(row)">{{ t("action.edit") }}</el-button>
-                <el-button type="danger" link @click="removeKnowledge(row)">{{ t("action.delete") }}</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-
-          <div class="test-wrap">
-            <div class="test-head">{{ t("pageMore.word.ragTest") }}</div>
-            <div class="dialog-toolbar">
-              <el-input v-model="ragQuery" :placeholder="t('pageMore.placeholder.ragQuestion')" @keyup.enter="runRAGTest" />
-              <el-button type="primary" :loading="ragTesting" @click="runRAGTest">{{ t("pageMore.btn.runRetrieve") }}</el-button>
-            </div>
-            <el-table :data="ragRows" size="small" border class="more-table">
-              <el-table-column prop="score" :label="t('pageMore.table.score')" width="80" />
-              <el-table-column prop="title" :label="t('pageMore.table.hitDoc')" min-width="160" show-overflow-tooltip />
-              <el-table-column prop="source_type" :label="t('pageMore.table.source')" width="90" />
-              <el-table-column prop="content" :label="t('pageMore.table.hitSegment')" min-width="320" show-overflow-tooltip />
-            </el-table>
-          </div>
-        </section>
-      </div>
-    </el-dialog>
-
-    <el-dialog v-model="knowledgeEditVisible" :title="knowledgeForm.id ? t('pageMore.dialog.editKnowledge') : t('pageMore.dialog.newKnowledge')" width="620px" class="more-dialog">
-      <el-form label-width="92px">
-        <el-form-item :label="t('app.label')">
-          <el-select v-model="knowledgeForm.app_id" filterable style="width: 100%">
-            <el-option v-for="app in appOptions" :key="app.value" :label="app.label" :value="app.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="t('pageMore.table.title')"><el-input v-model="knowledgeForm.title" maxlength="255" show-word-limit /></el-form-item>
-        <el-form-item :label="t('pageMore.table.tags')"><el-input v-model="knowledgeForm.tags" :placeholder="t('pageMore.placeholder.commaSeparated')" /></el-form-item>
-        <el-form-item :label="t('pageMore.table.content')"><el-input v-model="knowledgeForm.content" type="textarea" :rows="6" maxlength="5000" show-word-limit /></el-form-item>
-        <el-form-item :label="t('status.enabled')"><el-switch v-model="knowledgeForm.enabled" /></el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="knowledgeEditVisible = false">{{ t("action.cancel") }}</el-button>
-        <el-button type="primary" :loading="savingKnowledge" @click="saveKnowledge">{{ t("action.save") }}</el-button>
-      </template>
-    </el-dialog>
-
     <el-dialog v-model="faqDialogVisible" :title="t('pageMore.dialog.faq')" width="920px" top="6vh" class="more-dialog more-dialog-wide">
       <div class="workspace-grid workspace-grid-compact">
         <aside class="workspace-side">
@@ -500,26 +410,6 @@ const qrcodeContainer = ref(null);
 let wecomPollingTimer = null;
 let wecomPollingExpireTimer = null;
 
-const knowledgeDialogVisible = ref(false);
-const knowledgeLoading = ref(false);
-const knowledgeRows = ref([]);
-const knowledgeKeyword = ref("");
-const knowledgeAppID = ref("");
-const knowledgeEditVisible = ref(false);
-const savingKnowledge = ref(false);
-const knowledgeForm = ref({
-  id: 0,
-  app_id: "",
-  title: "",
-  tags: "",
-  content: "",
-  enabled: true,
-});
-
-const ragQuery = ref("");
-const ragRows = ref([]);
-const ragTesting = ref(false);
-
 const faqDialogVisible = ref(false);
 const faqLoading = ref(false);
 const faqRows = ref([]);
@@ -549,7 +439,6 @@ const apiKeyCreateForm = ref({
 const apiKeySecretVisible = ref(false);
 const latestSecretValue = ref("");
 
-const knowledgeEnabledCount = computed(() => knowledgeRows.value.filter((item) => item?.enabled !== false).length);
 const faqEnabledCount = computed(() => faqRows.value.filter((item) => item?.enabled !== false).length);
 const apiKeyEnabledCount = computed(() => apiKeyRows.value.filter((item) => item?.enabled).length);
 
@@ -593,16 +482,15 @@ function resetPreferences() {
 async function saveAiConfig() {
   savingAIConfig.value = true;
   try {
-    const resp = await api.getSystemSettings();
-    const settings = { ...(resp?.data?.data || {}) };
-    settings.aiBotEnabled = Boolean(aiConfig.value.enabled);
-    settings.aiBotName = String(aiConfig.value.botName || "").trim();
-    settings.aiBotModel = String(aiConfig.value.model || "").trim();
-    settings.aiBotWhenAssigned = Boolean(aiConfig.value.whenAssigned);
-    settings.aiBotTopK = Number(aiConfig.value.topK || 5);
-    settings.aiBotStyle = String(aiConfig.value.style || "professional");
-    settings.aiBotPrompt = String(aiConfig.value.prompt || "").trim();
-    await api.updateSystemSettings(settings);
+    await api.updateAgentAIBotSettings({
+      aiBotEnabled: Boolean(aiConfig.value.enabled),
+      aiBotName: String(aiConfig.value.botName || "").trim(),
+      aiBotModel: String(aiConfig.value.model || "").trim(),
+      aiBotWhenAssigned: Boolean(aiConfig.value.whenAssigned),
+      aiBotTopK: Number(aiConfig.value.topK || 5),
+      aiBotStyle: String(aiConfig.value.style || "professional"),
+      aiBotPrompt: String(aiConfig.value.prompt || "").trim(),
+    });
     aiDialogVisible.value = false;
     ElMessage.success(t("pageMore.toast.aiSaved"));
   } catch (error) {
@@ -693,7 +581,7 @@ async function loadAiModelOptions() {
 
 async function loadAiConfigFromSystemSettings() {
   try {
-    const resp = await api.getSystemSettings();
+    const resp = await api.getAgentAIBotSettings();
     const data = resp?.data?.data || {};
     aiConfig.value = {
       enabled: Boolean(data.aiBotEnabled),
@@ -735,21 +623,9 @@ async function loadAppOptions() {
       appOptions.value = [];
     }
   }
-  if (!knowledgeAppID.value && appOptions.value[0]) knowledgeAppID.value = appOptions.value[0].value;
   if (!faqAppID.value && appOptions.value[0]) faqAppID.value = appOptions.value[0].value;
   if (!apiKeyAppID.value && appOptions.value[0]) apiKeyAppID.value = appOptions.value[0].value;
   if (!aiTestAppID.value && appOptions.value[0]) aiTestAppID.value = appOptions.value[0].value;
-}
-
-function toKnowledgeForm(row) {
-  return {
-    id: row?.id || 0,
-    app_id: row?.app_id || knowledgeAppID.value || appOptions.value[0]?.value || "",
-    title: row?.title || "",
-    tags: row?.tags || "",
-    content: row?.content || "",
-    enabled: row?.enabled !== false,
-  };
 }
 
 function toFaqForm(row) {
@@ -761,114 +637,6 @@ function toFaqForm(row) {
     category: row?.category || "",
     enabled: row?.enabled !== false,
   };
-}
-
-async function loadKnowledge() {
-  if (!knowledgeAppID.value) return;
-  knowledgeLoading.value = true;
-  try {
-    const resp = await api.listKnowledge({
-      app_id: knowledgeAppID.value,
-      keyword: knowledgeKeyword.value || undefined,
-    });
-    knowledgeRows.value = resp?.data?.data?.data || [];
-  } catch (error) {
-    ElMessage.error(error.message || t("pageMore.toast.loadKnowledgeFailed"));
-  } finally {
-    knowledgeLoading.value = false;
-  }
-}
-
-async function runRAGTest() {
-  if (!knowledgeAppID.value || !ragQuery.value.trim()) {
-    ElMessage.warning(t("pageMore.toast.selectAppAndQuestion"));
-    return;
-  }
-  ragTesting.value = true;
-  try {
-    const resp = await api.ragTestKnowledge({
-      app_id: knowledgeAppID.value,
-      query: ragQuery.value.trim(),
-      top_k: 8,
-    });
-    ragRows.value = resp?.data?.data?.results || [];
-  } catch (error) {
-    ElMessage.error(error.message || t("pageMore.toast.ragTestFailed"));
-  } finally {
-    ragTesting.value = false;
-  }
-}
-
-async function onKnowledgeFileSelected(file) {
-  if (!knowledgeAppID.value) {
-    ElMessage.warning(t("pageMore.toast.selectAppFirst"));
-    return;
-  }
-  const raw = file?.raw;
-  if (!raw) return;
-  try {
-    const uploadResp = await api.uploadFile(knowledgeAppID.value, raw, "file");
-    const data = uploadResp?.data?.data || {};
-    if (!data.url) {
-      ElMessage.error(t("pageMore.toast.uploadFailed"));
-      return;
-    }
-    await api.uploadKnowledge({
-      app_id: knowledgeAppID.value,
-      name: raw.name || "knowledge",
-      url: data.url,
-      tags: "",
-    });
-    await loadKnowledge();
-    ElMessage.success(t("pageMore.toast.docAdded"));
-  } catch (error) {
-    ElMessage.error(error.message || t("pageMore.toast.docAddFailed"));
-  }
-}
-
-function openKnowledgeEditor(row = null) {
-  knowledgeForm.value = toKnowledgeForm(row);
-  knowledgeEditVisible.value = true;
-}
-
-async function saveKnowledge() {
-  if (!knowledgeForm.value.app_id || !knowledgeForm.value.title.trim() || !knowledgeForm.value.content.trim()) {
-    ElMessage.warning(t("pageMore.toast.fillKnowledgeRequired"));
-    return;
-  }
-  savingKnowledge.value = true;
-  try {
-    const payload = {
-      app_id: knowledgeForm.value.app_id,
-      title: knowledgeForm.value.title.trim(),
-      tags: knowledgeForm.value.tags.trim(),
-      content: knowledgeForm.value.content.trim(),
-      enabled: knowledgeForm.value.enabled,
-    };
-    if (knowledgeForm.value.id) {
-      await api.updateKnowledge({ id: knowledgeForm.value.id, ...payload });
-    } else {
-      await api.createKnowledge(payload);
-    }
-    knowledgeEditVisible.value = false;
-    await loadKnowledge();
-    ElMessage.success(t("pageMore.toast.saveSuccess"));
-  } catch (error) {
-    ElMessage.error(error.message || t("pageMore.toast.saveFailed"));
-  } finally {
-    savingKnowledge.value = false;
-  }
-}
-
-async function removeKnowledge(row) {
-  try {
-    await ElMessageBox.confirm(`${t("pageMore.confirm.deleteKnowledge")}「${row.title}」？`, t("pageMore.confirm.title"), { type: "warning" });
-    await api.deleteKnowledge(row.id);
-    await loadKnowledge();
-    ElMessage.success(t("pageMore.toast.deleteSuccess"));
-  } catch (error) {
-    if (error !== "cancel") ElMessage.error(error.message || t("pageMore.toast.deleteFailed"));
-  }
 }
 
 async function loadFaq() {
@@ -1030,7 +798,7 @@ async function copySecret() {
 
 async function openSensitiveWordsDialog() {
   try {
-    const resp = await api.getSystemSettings();
+    const resp = await api.getAgentSensitiveWords();
     const settings = resp?.data?.data || {};
     sensitiveWordsText.value = String(settings.sensitiveWords || "");
     sensitiveDialogVisible.value = true;
@@ -1042,10 +810,9 @@ async function openSensitiveWordsDialog() {
 async function saveSensitiveWords() {
   savingSensitiveWords.value = true;
   try {
-    const resp = await api.getSystemSettings();
-    const settings = { ...(resp?.data?.data || {}) };
-    settings.sensitiveWords = String(sensitiveWordsText.value || "").trim();
-    await api.updateSystemSettings(settings);
+    await api.updateAgentSensitiveWords({
+      sensitiveWords: String(sensitiveWordsText.value || "").trim(),
+    });
     sensitiveDialogVisible.value = false;
     ElMessage.success(t("pageMore.toast.sensitiveWordsSaved"));
   } catch (error) {

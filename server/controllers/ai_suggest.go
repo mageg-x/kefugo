@@ -147,53 +147,21 @@ func (ac *AISuggestController) Suggest(c *gin.Context) {
 	suggestion := ""
 	chunkCount := 0
 
-	// 查找应用关联的知识库
-	var base models.KnowledgeBase
-	baseFound := false
-	if store.DB != nil && appID != "" {
-		if err := store.DB.Where("app_id = ?", appID).Order("updated_at DESC").First(&base).Error; err == nil {
-			baseFound = true
-		}
+	hits, searchErr := searchKnowledgeHitsByApp(c.Request.Context(), appID, visitorText, 5)
+	if searchErr != nil {
+		logger.Errorf("ai suggest vector search failed app_id=%s err=%v", appID, searchErr)
 	}
 
-	// 优先使用向量检索 + 外部 API 模型生成回复建议
-	if baseFound {
-		vdb := service.GetVectorStore()
-
-		// 检索相关知识片段
-		hits, searchErr := vdb.SearchText(c.Request.Context(), base.Collection, visitorText, 5)
-		if searchErr == nil && len(hits) > 0 {
-			hits = service.RerankHits(c.Request.Context(), visitorText, hits, 5)
-			answer, _, answerErr := service.AnswerWithEnabledAPIModel(c.Request.Context(), visitorText, hits)
-			if answerErr == nil && answer != nil {
-				suggestion = strings.TrimSpace(answer.Answer)
-				source = aiSuggestSourceVectorEino
-				chunkCount = len(answer.Chunks)
-				for idx, item := range answer.Chunks {
-					metaChunks = append(metaChunks, gin.H{
-						"rank":        idx + 1,
-						"title":       "",
-						"content":     item.Content,
-						"score":       item.Score,
-						"source_type": "vector",
-						"source_name": base.Name,
-					})
-				}
-			} else {
-				if !errors.Is(answerErr, service.ErrNoEnabledAPIModel) {
-					logger.Errorf("ai suggest model answer failed app_id=%s err=%v", appID, answerErr)
-				}
-			}
-		} else {
-			logger.Errorf("ai suggest vector search failed app_id=%s err=%v", appID, searchErr)
+	if len(hits) > 0 {
+		answer, _, answerErr := service.AnswerWithEnabledAPIModel(c.Request.Context(), visitorText, hits)
+		if answerErr == nil && answer != nil {
+			suggestion = strings.TrimSpace(answer.Answer)
+			source = aiSuggestSourceVectorEino
+		} else if !errors.Is(answerErr, service.ErrNoEnabledAPIModel) {
+			logger.Errorf("ai suggest model answer failed app_id=%s err=%v", appID, answerErr)
 		}
-	}
 
-	// 如果AI生成失败或无结果，使用本地RAG生成建议
-	if strings.TrimSpace(suggestion) == "" {
-		chunks := queryKnowledgeChunks(appID, visitorText, 5)
-		suggestion = composeAISuggestion(style, prompt, visitorText, chunks)
-		source = aiSuggestSourceLocalFallback
+		chunks := vectorHitsToRAGChunks(hits)
 		chunkCount = len(chunks)
 		for idx, item := range chunks {
 			metaChunks = append(metaChunks, gin.H{
@@ -204,6 +172,11 @@ func (ac *AISuggestController) Suggest(c *gin.Context) {
 				"source_type": item.SourceType,
 				"source_name": item.SourceName,
 			})
+		}
+
+		if strings.TrimSpace(suggestion) == "" {
+			suggestion = composeAISuggestion(style, prompt, visitorText, chunks)
+			source = aiSuggestSourceLocalFallback
 		}
 	}
 

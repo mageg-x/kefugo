@@ -150,7 +150,7 @@
                       </div>
                     </div>
                     <a v-if="msg.url || msg.content" class="kefu-file-download" :href="msg.url || msg.content"
-                      target="_blank" rel="noopener noreferrer" :title="t('action.download')"
+                      :download="msg.name || t('message.file')" :title="t('action.download')"
                       :aria-label="t('action.download')">
                       <Download :size="18" />
                     </a>

@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -59,24 +58,7 @@ func (kc *KnowledgeWorkspaceController) hasAppAccess(c *gin.Context, appID strin
 	if err := store.DB.Where("username = ?", userName).First(&user).Error; err != nil {
 		return false
 	}
-	rawApps := strings.TrimSpace(user.Apps)
-	if rawApps == "" {
-		return false
-	}
-	if strings.Contains(strings.ToLower(rawApps), "all") {
-		return true
-	}
-	var appList []string
-	if err := json.Unmarshal([]byte(rawApps), &appList); err == nil {
-		for _, v := range appList {
-			if strings.EqualFold(strings.TrimSpace(v), appID) {
-				return true
-			}
-		}
-	}
-	lowerRaw := strings.ToLower(rawApps)
-	lowerAppID := strings.ToLower(appID)
-	return strings.Contains(lowerRaw, "\""+lowerAppID+"\"") || strings.Contains(lowerRaw, lowerAppID)
+	return isAgentForApp(user.Apps, appID)
 }
 
 func (kc *KnowledgeWorkspaceController) getBaseByID(c *gin.Context) (*models.KnowledgeBase, bool) {
@@ -147,6 +129,10 @@ func (kc *KnowledgeWorkspaceController) CreateBase(c *gin.Context) {
 	req.Description = strings.TrimSpace(req.Description)
 	if req.AppID == "" || req.Name == "" {
 		response.ResponseError(c, http.StatusBadRequest, response.ErrCodeKnowledgeBaseCreateInvalid)
+		return
+	}
+	if !kc.hasAppAccess(c, req.AppID) {
+		response.ResponseError(c, http.StatusForbidden, response.ErrCodeKnowledgeBaseAppAccessDenied)
 		return
 	}
 

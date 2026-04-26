@@ -272,6 +272,22 @@ class ApiService {
     return this.api.put('/agent/settings', data)
   }
 
+  async getAgentAIBotSettings() {
+    return this.api.get('/agent/ai-bot-settings')
+  }
+
+  async updateAgentAIBotSettings(data) {
+    return this.api.put('/agent/ai-bot-settings', data)
+  }
+
+  async getAgentSensitiveWords() {
+    return this.api.get('/agent/sensitive-words')
+  }
+
+  async updateAgentSensitiveWords(data) {
+    return this.api.put('/agent/sensitive-words', data)
+  }
+
   // AI 建议
   async suggestAIReply(sid = '', query = '', appId = '') {
     return this.api.post('/ai/suggest', { sid, query, app_id: appId })
@@ -279,31 +295,6 @@ class ApiService {
 
   async testAIBot(appId = '', query = '') {
     return this.api.post('/ai/bot-test', { app_id: appId, query })
-  }
-
-  // 知识库
-  async listKnowledge(params) {
-    return this.api.get('/knowledge/list', { params })
-  }
-
-  async createKnowledge(data) {
-    return this.api.post('/knowledge/create', data)
-  }
-
-  async updateKnowledge(data) {
-    return this.api.put('/knowledge/update', data)
-  }
-
-  async deleteKnowledge(id) {
-    return this.api.delete('/knowledge/delete', { params: { id } })
-  }
-
-  async uploadKnowledge(data) {
-    return this.api.post('/knowledge/upload', data)
-  }
-
-  async ragTestKnowledge(data) {
-    return this.api.post('/knowledge/rag-test', data)
   }
 
   // 新知识库工作区

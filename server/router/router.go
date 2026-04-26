@@ -29,7 +29,6 @@ func SetupRouter() *gin.Engine {
 	agentController := &controllers.AgentController{}
 	sessionController := &controllers.SessionController{}
 	quickReplyController := &controllers.QuickReplyController{}
-	knowledgeController := &controllers.KnowledgeController{}
 	knowledgeWorkspaceController := &controllers.KnowledgeWorkspaceController{}
 	apiModelConfigController := &controllers.APIModelConfigController{}
 	faqController := &controllers.FAQController{}
@@ -143,18 +142,12 @@ func SetupRouter() *gin.Engine {
 			auth.GET("/export/sessions", middleware.RequireRoles("admin"), adminPanelController.ExportSessions)
 			auth.GET("/agent/settings", middleware.RequireRoles("agent", "admin"), agentSettingController.Get)
 			auth.PUT("/agent/settings", middleware.RequireRoles("agent", "admin"), agentSettingController.Update)
+			auth.GET("/agent/ai-bot-settings", middleware.RequireRoles("agent", "admin"), adminPanelController.GetAgentAIBotSettings)
+			auth.PUT("/agent/ai-bot-settings", middleware.RequireRoles("agent", "admin"), adminPanelController.UpdateAgentAIBotSettings)
+			auth.GET("/agent/sensitive-words", middleware.RequireRoles("agent", "admin"), adminPanelController.GetAgentSensitiveWords)
+			auth.PUT("/agent/sensitive-words", middleware.RequireRoles("agent", "admin"), adminPanelController.UpdateAgentSensitiveWords)
 			auth.POST("/ai/suggest", middleware.RequireRoles("agent", "admin"), aiSuggestController.Suggest)
 			auth.POST("/ai/bot-test", middleware.RequireRoles("agent", "admin"), visitorController.AIBotTest)
-
-			knowledge := auth.Group("/knowledge")
-			{
-				knowledge.GET("/list", middleware.RequireRoles("agent", "admin"), knowledgeController.List)
-				knowledge.POST("/create", middleware.RequireRoles("agent", "admin"), knowledgeController.Create)
-				knowledge.PUT("/update", middleware.RequireRoles("agent", "admin"), knowledgeController.Update)
-				knowledge.DELETE("/delete", middleware.RequireRoles("agent", "admin"), knowledgeController.Delete)
-				knowledge.POST("/upload", middleware.RequireRoles("agent", "admin"), knowledgeController.UploadByURL)
-				knowledge.POST("/rag-test", middleware.RequireRoles("agent", "admin"), knowledgeController.RAGTest)
-			}
 
 			knowledgeBases := auth.Group("/knowledge-bases")
 			knowledgeBases.Use(middleware.RequireRoles("agent", "admin"))

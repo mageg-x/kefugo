@@ -62,8 +62,8 @@
                     <span v-if="msg.fileSize" class="kefu-file-size">{{ formatFileSize(msg.fileSize) }}</span>
                   </div>
                 </div>
-                <a v-if="msg.fileUrl || msg.url" class="kefu-file-download" :href="msg.fileUrl || msg.url" target="_blank"
-                  rel="noopener noreferrer" :title="t('action.download', '下载')" :aria-label="t('action.download', '下载')">
+                <a v-if="msg.fileUrl || msg.url" class="kefu-file-download" :href="msg.fileUrl || msg.url"
+                  :download="msg.fileName || t('message.file', '文件')" :title="t('action.download', '下载')" :aria-label="t('action.download', '下载')">
                   <Download :size="18" />
                 </a>
               </div>

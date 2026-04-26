@@ -404,6 +404,99 @@ func (ac *AdminPanelController) UpdateSystemSettings(c *gin.Context) {
 	response.ResponseSuccess(c, req)
 }
 
+// GetAgentAIBotSettings 返回客服可管理的 AI 配置子集。
+func (ac *AdminPanelController) GetAgentAIBotSettings(c *gin.Context) {
+	cfg := getSystemSettingsCached()
+	response.ResponseSuccess(c, gin.H{
+		"aiBotEnabled":      cfg.AIBotEnabled,
+		"aiBotName":         cfg.AIBotName,
+		"aiBotModel":        cfg.AIBotModel,
+		"aiBotStyle":        cfg.AIBotStyle,
+		"aiBotPrompt":       cfg.AIBotPrompt,
+		"aiBotTopK":         cfg.AIBotTopK,
+		"aiBotWhenAssigned": cfg.AIBotWhenAssigned,
+	})
+}
+
+// UpdateAgentAIBotSettings 更新客服可管理的 AI 配置子集。
+func (ac *AdminPanelController) UpdateAgentAIBotSettings(c *gin.Context) {
+	var req struct {
+		AIBotEnabled      bool   `json:"aiBotEnabled"`
+		AIBotName         string `json:"aiBotName"`
+		AIBotModel        string `json:"aiBotModel"`
+		AIBotStyle        string `json:"aiBotStyle"`
+		AIBotPrompt       string `json:"aiBotPrompt"`
+		AIBotTopK         int    `json:"aiBotTopK"`
+		AIBotWhenAssigned bool   `json:"aiBotWhenAssigned"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Errorf("agent ai settings params invalid: %v", err)
+		response.ResponseError(c, http.StatusBadRequest, response.ErrCodeAdminSettingsInvalidParams)
+		return
+	}
+
+	cfg := loadSystemSettingsFromDB()
+	cfg.AIBotEnabled = req.AIBotEnabled
+	cfg.AIBotName = strings.TrimSpace(req.AIBotName)
+	cfg.AIBotModel = strings.TrimSpace(req.AIBotModel)
+	cfg.AIBotStyle = strings.TrimSpace(req.AIBotStyle)
+	cfg.AIBotPrompt = strings.TrimSpace(req.AIBotPrompt)
+	cfg.AIBotTopK = req.AIBotTopK
+	cfg.AIBotWhenAssigned = req.AIBotWhenAssigned
+	cfg = normalizeSystemSettings(cfg)
+
+	if err := saveSystemSettingsRecord(cfg); err != nil {
+		logger.Errorf("agent ai settings save failed: %v", err)
+		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeAdminSettingsSaveFailed)
+		return
+	}
+	setSystemSettingsCache(cfg)
+	applySystemSettingsRuntimeHooks(cfg)
+	response.ResponseSuccess(c, gin.H{
+		"aiBotEnabled":      cfg.AIBotEnabled,
+		"aiBotName":         cfg.AIBotName,
+		"aiBotModel":        cfg.AIBotModel,
+		"aiBotStyle":        cfg.AIBotStyle,
+		"aiBotPrompt":       cfg.AIBotPrompt,
+		"aiBotTopK":         cfg.AIBotTopK,
+		"aiBotWhenAssigned": cfg.AIBotWhenAssigned,
+	})
+}
+
+// GetAgentSensitiveWords 返回客服可管理的敏感词配置。
+func (ac *AdminPanelController) GetAgentSensitiveWords(c *gin.Context) {
+	cfg := getSystemSettingsCached()
+	response.ResponseSuccess(c, gin.H{
+		"sensitiveWords": cfg.SensitiveWords,
+	})
+}
+
+// UpdateAgentSensitiveWords 更新客服可管理的敏感词配置。
+func (ac *AdminPanelController) UpdateAgentSensitiveWords(c *gin.Context) {
+	var req struct {
+		SensitiveWords string `json:"sensitiveWords"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Errorf("agent sensitive words params invalid: %v", err)
+		response.ResponseError(c, http.StatusBadRequest, response.ErrCodeAdminSettingsInvalidParams)
+		return
+	}
+
+	cfg := loadSystemSettingsFromDB()
+	cfg.SensitiveWords = strings.TrimSpace(req.SensitiveWords)
+	cfg = normalizeSystemSettings(cfg)
+	if err := saveSystemSettingsRecord(cfg); err != nil {
+		logger.Errorf("agent sensitive words save failed: %v", err)
+		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeAdminSettingsSaveFailed)
+		return
+	}
+	setSystemSettingsCache(cfg)
+	applySystemSettingsRuntimeHooks(cfg)
+	response.ResponseSuccess(c, gin.H{
+		"sensitiveWords": cfg.SensitiveWords,
+	})
+}
+
 // ProfileSummary 返回当前登录用户在个人中心需要的摘要统计。
 func (ac *AdminPanelController) ProfileSummary(c *gin.Context) {
 	userName, _ := getAuthUser(c)

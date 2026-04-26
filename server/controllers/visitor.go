@@ -19,7 +19,6 @@ import (
 
 	"kefu-server/models"
 	"kefu-server/service"
-	"kefu-server/store"
 	"kefu-server/utils"
 	"kefu-server/utils/logger"
 	"kefu-server/utils/response"
@@ -1189,14 +1188,6 @@ func (vc *VisitorController) generateAIBotAnswer(ctx context.Context, session *m
 		topK = 20
 	}
 
-	var base models.KnowledgeBase
-	baseFound := false
-	if store.DB != nil {
-		if err := store.DB.Where("app_id = ?", appID).Order("updated_at DESC").First(&base).Error; err == nil {
-			baseFound = true
-		}
-	}
-
 	systemPrompt := strings.TrimSpace(cfg.AIBotPrompt)
 	if systemPrompt == "" {
 		systemPrompt = "你是一名客服机器人，回答要准确、简洁、礼貌。证据不足时明确说明并建议转人工。"
@@ -1208,46 +1199,41 @@ func (vc *VisitorController) generateAIBotAnswer(ctx context.Context, session *m
 	}
 	lastTypingPush := time.Now()
 
-	if baseFound {
-		vdb := service.GetVectorStore()
-		hits, err := vdb.SearchText(ctx, base.Collection, question, topK)
-		if err == nil && len(hits) > 0 {
-			hits = service.RerankHits(ctx, question, hits, topK)
-			modelOverride := strings.TrimSpace(cfg.AIBotModel)
-			if modelOverride != "" {
-				if modelCfg, cfgErr := service.GetEnabledAPIModelConfig(); cfgErr == nil {
-					modelCfg.ModelName = modelOverride
-					if out, inferErr := service.AnswerWithAPIModelStreamWithSystemPrompt(ctx, modelCfg, question, hits, systemPrompt, func(current string) {
-						if strings.TrimSpace(streamKey) == "" {
-							return
-						}
-						vc.pushAIBotStreamDelta(session, botName, streamKey, current, false)
-						if time.Since(lastTypingPush) > 1500*time.Millisecond {
-							PushTypingToVisitor(session.VisitorID(), session.SID)
-							lastTypingPush = time.Now()
-						}
-					}); inferErr == nil && out != nil && strings.TrimSpace(out.Answer) != "" {
-						return strings.TrimSpace(out.Answer)
+	hits, err := searchKnowledgeHitsByApp(ctx, appID, question, topK)
+	if err == nil && len(hits) > 0 {
+		modelOverride := strings.TrimSpace(cfg.AIBotModel)
+		if modelOverride != "" {
+			if modelCfg, cfgErr := service.GetEnabledAPIModelConfig(); cfgErr == nil {
+				modelCfg.ModelName = modelOverride
+				if out, inferErr := service.AnswerWithAPIModelStreamWithSystemPrompt(ctx, modelCfg, question, hits, systemPrompt, func(current string) {
+					if strings.TrimSpace(streamKey) == "" {
+						return
 					}
+					vc.pushAIBotStreamDelta(session, botName, streamKey, current, false)
+					if time.Since(lastTypingPush) > 1500*time.Millisecond {
+						PushTypingToVisitor(session.VisitorID(), session.SID)
+						lastTypingPush = time.Now()
+					}
+				}); inferErr == nil && out != nil && strings.TrimSpace(out.Answer) != "" {
+					return strings.TrimSpace(out.Answer)
 				}
-			}
-			if out, _, inferErr := service.AnswerWithEnabledAPIModelStreamWithSystemPrompt(ctx, question, hits, systemPrompt, func(current string) {
-				if strings.TrimSpace(streamKey) == "" {
-					return
-				}
-				vc.pushAIBotStreamDelta(session, botName, streamKey, current, false)
-				if time.Since(lastTypingPush) > 1500*time.Millisecond {
-					PushTypingToVisitor(session.VisitorID(), session.SID)
-					lastTypingPush = time.Now()
-				}
-			}); inferErr == nil && out != nil && strings.TrimSpace(out.Answer) != "" {
-				return strings.TrimSpace(out.Answer)
 			}
 		}
+		if out, _, inferErr := service.AnswerWithEnabledAPIModelStreamWithSystemPrompt(ctx, question, hits, systemPrompt, func(current string) {
+			if strings.TrimSpace(streamKey) == "" {
+				return
+			}
+			vc.pushAIBotStreamDelta(session, botName, streamKey, current, false)
+			if time.Since(lastTypingPush) > 1500*time.Millisecond {
+				PushTypingToVisitor(session.VisitorID(), session.SID)
+				lastTypingPush = time.Now()
+			}
+		}); inferErr == nil && out != nil && strings.TrimSpace(out.Answer) != "" {
+			return strings.TrimSpace(out.Answer)
+		}
+		return composeAISuggestion(cfg.AIBotStyle, "", question, vectorHitsToRAGChunks(hits))
 	}
-
-	chunks := queryKnowledgeChunks(appID, question, topK)
-	return composeAISuggestion(cfg.AIBotStyle, "", question, chunks)
+	return composeAISuggestion(cfg.AIBotStyle, "", question, nil)
 }
 
 // detectDevice 基于User-Agent进行简易设备类型识别
