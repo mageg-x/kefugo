@@ -71,7 +71,7 @@ const routes = [
         name: "Settings",
         component: Settings,
         meta: {
-          requiresAgent: true,
+          requiresAdmin: true,
         },
       },
       {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"kefu-server/notification"
 	"kefu-server/store"
 	"kefu-server/utils/logger"
+	"kefu-server/utils/response"
 )
 
 type NotificationController struct {
@@ -26,7 +28,10 @@ func NewNotificationController() *NotificationController {
 	}
 }
 
-func (c *NotificationController) loadNotificationConfigs() {
+func loadNotificationConfigs(manager *notification.Manager) {
+	if manager == nil || store.DB == nil {
+		return
+	}
 	var setting models.SystemSetting
 	if err := store.DB.Where("key = ?", "notification_settings").First(&setting).Error; err != nil {
 		return
@@ -37,7 +42,95 @@ func (c *NotificationController) loadNotificationConfigs() {
 		return
 	}
 
-	c.manager.LoadConfigs(configData)
+	manager.LoadConfigs(configData)
+}
+
+func (c *NotificationController) loadNotificationConfigs() {
+	loadNotificationConfigs(c.manager)
+}
+
+func cloneConfigMap(source map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{}, len(source))
+	for k, v := range source {
+		result[k] = v
+	}
+	return result
+}
+
+func mergeSecretConfig(current map[string]interface{}, incoming map[string]interface{}) map[string]interface{} {
+	merged := cloneConfigMap(current)
+	for k, v := range incoming {
+		merged[k] = v
+	}
+	for _, key := range []string{"secret", "appSecret", "password"} {
+		value, ok := merged[key].(string)
+		if ok && strings.TrimSpace(value) != "" {
+			continue
+		}
+		if oldValue, ok := current[key].(string); ok && strings.TrimSpace(oldValue) != "" {
+			merged[key] = oldValue
+		}
+	}
+	return merged
+}
+
+func buildNotificationSettingsPayload(manager *notification.Manager) map[string]interface{} {
+	payload := make(map[string]interface{})
+	if manager == nil {
+		return payload
+	}
+	for channelType, cfg := range manager.GetAllConfigs() {
+		item := map[string]interface{}{
+			"enabled": cfg.Enabled,
+			"config":  cloneConfigMap(cfg.Config),
+		}
+		if len(cfg.Metadata) > 0 {
+			item["metadata"] = cfg.Metadata
+		}
+		payload[string(channelType)] = item
+	}
+	return payload
+}
+
+func isSupportedAgentBindChannel(channelType notification.ChannelType) bool {
+	return channelType == notification.ChannelWecom
+}
+
+func buildBindQrcodePayload(channelType notification.ChannelType, bindURL string, state string) map[string]string {
+	payload := map[string]string{
+		"url":   bindURL,
+		"state": state,
+	}
+	if channelType != notification.ChannelWecom {
+		return payload
+	}
+
+	parsedURL, err := url.Parse(bindURL)
+	if err != nil {
+		return payload
+	}
+	query := parsedURL.Query()
+
+	if corpID := firstNonEmpty(query.Get("appid"), query.Get("corpid"), query.Get("corpId")); corpID != "" {
+		payload["corpId"] = corpID
+	}
+	if agentID := firstNonEmpty(query.Get("agentid"), query.Get("agentId")); agentID != "" {
+		payload["agentId"] = agentID
+	}
+	if redirectURI := firstNonEmpty(query.Get("redirect_uri"), query.Get("redirectUri")); redirectURI != "" {
+		payload["redirectUri"] = redirectURI
+	}
+	return payload
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 type ChannelConfigRequest struct {
@@ -89,7 +182,7 @@ func (c *NotificationController) GetChannelConfig(ctx *gin.Context) {
 
 	notifier, exists := notification.GetNotifier(channelType)
 	if !exists {
-		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "不支持的通知渠道"})
+		response.ResponseError(ctx, http.StatusBadRequest, response.ErrCodeNotificationChannelUnsupported)
 		return
 	}
 
@@ -141,36 +234,36 @@ func (c *NotificationController) SaveChannelConfig(ctx *gin.Context) {
 
 	notifier, exists := notification.GetNotifier(channelType)
 	if !exists {
-		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "不支持的通知渠道"})
+		response.ResponseError(ctx, http.StatusBadRequest, response.ErrCodeNotificationChannelUnsupported)
 		return
 	}
 
 	var req ChannelConfigRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "参数错误"})
-		return
-	}
-
-	if err := notifier.ValidateConfig(req.Config); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": err.Error()})
+		response.ResponseError(ctx, http.StatusBadRequest, response.ErrCodeInvalidParams)
 		return
 	}
 
 	c.loadNotificationConfigs()
+	mergedConfig := cloneConfigMap(req.Config)
+	if existing, ok := c.manager.GetConfig(channelType); ok && existing != nil {
+		mergedConfig = mergeSecretConfig(existing.Config, mergedConfig)
+	}
+
+	if err := notifier.ValidateConfig(mergedConfig); err != nil {
+		response.ResponseErrorWithMsg(ctx, http.StatusBadRequest, response.ErrCodeInvalidParams, err.Error())
+		return
+	}
 
 	config := &notification.ChannelConfig{
 		Type:    channelType,
 		Enabled: req.Enabled,
-		Config:  req.Config,
+		Config:  mergedConfig,
 	}
 
 	c.manager.UpdateConfig(channelType, config)
 
-	configData := make(map[string]interface{})
-	for ch, cfg := range c.manager.GetAllConfigs() {
-		configData[string(ch)] = cfg.Config
-	}
-
+	configData := buildNotificationSettingsPayload(c.manager)
 	configBytes, err := json.Marshal(configData)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "配置序列化失败"})
@@ -237,10 +330,14 @@ func (c *NotificationController) TestChannel(ctx *gin.Context) {
 func (c *NotificationController) GetBindQrcode(ctx *gin.Context) {
 	channelStr := ctx.Param("channel")
 	channelType := notification.ChannelType(channelStr)
+	if !isSupportedAgentBindChannel(channelType) {
+		response.ResponseError(ctx, http.StatusBadRequest, response.ErrCodeNotificationChannelUnsupported)
+		return
+	}
 
 	uid, ok := getAuthUserID(ctx)
 	if !ok {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "未登录"})
+		response.ResponseError(ctx, http.StatusUnauthorized, response.ErrCodeAuthUnauthorized)
 		return
 	}
 
@@ -248,11 +345,7 @@ func (c *NotificationController) GetBindQrcode(ctx *gin.Context) {
 
 	config, exists := c.manager.GetConfig(channelType)
 	if !exists || !config.Enabled {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"code":    400,
-			"error":   "CONFIG_MISSING",
-			"message": "通知渠道未配置或未启用，请联系管理员",
-		})
+		response.ResponseError(ctx, http.StatusBadRequest, response.ErrCodeNotificationChannelNotConfigured)
 		return
 	}
 
@@ -279,17 +372,20 @@ func (c *NotificationController) GetBindQrcode(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"code": 0,
-		"data": map[string]string{
-			"url":   bindURL,
-			"state": state,
-		},
+		"data": buildBindQrcodePayload(channelType, bindURL, state),
 	})
 }
 
 func (c *NotificationController) GetBindStatus(ctx *gin.Context) {
+	channelType := notification.ChannelType(ctx.Param("channel"))
+	if !isSupportedAgentBindChannel(channelType) {
+		response.ResponseError(ctx, http.StatusBadRequest, response.ErrCodeNotificationChannelUnsupported)
+		return
+	}
+
 	state := ctx.Query("state")
 	if state == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "缺少 state 参数"})
+		response.ResponseError(ctx, http.StatusBadRequest, response.ErrCodeNotificationBindStateRequired)
 		return
 	}
 
@@ -326,9 +422,15 @@ func (c *NotificationController) GetBindStatus(ctx *gin.Context) {
 }
 
 func (c *NotificationController) GetBindInfo(ctx *gin.Context) {
+	channelType := notification.ChannelType(ctx.Param("channel"))
+	if !isSupportedAgentBindChannel(channelType) {
+		response.ResponseError(ctx, http.StatusBadRequest, response.ErrCodeNotificationChannelUnsupported)
+		return
+	}
+
 	uid, ok := getAuthUserID(ctx)
 	if !ok {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "未登录"})
+		response.ResponseError(ctx, http.StatusUnauthorized, response.ErrCodeAuthUnauthorized)
 		return
 	}
 
@@ -349,9 +451,15 @@ func (c *NotificationController) GetBindInfo(ctx *gin.Context) {
 }
 
 func (c *NotificationController) Unbind(ctx *gin.Context) {
+	channelType := notification.ChannelType(ctx.Param("channel"))
+	if !isSupportedAgentBindChannel(channelType) {
+		response.ResponseError(ctx, http.StatusBadRequest, response.ErrCodeNotificationChannelUnsupported)
+		return
+	}
+
 	uid, ok := getAuthUserID(ctx)
 	if !ok {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "未登录"})
+		response.ResponseError(ctx, http.StatusUnauthorized, response.ErrCodeAuthUnauthorized)
 		return
 	}
 
@@ -372,6 +480,10 @@ func (c *NotificationController) Unbind(ctx *gin.Context) {
 func (c *NotificationController) HandleCallback(ctx *gin.Context) {
 	channelStr := ctx.Param("channel")
 	channelType := notification.ChannelType(channelStr)
+	if !isSupportedAgentBindChannel(channelType) {
+		ctx.String(http.StatusBadRequest, "当前渠道暂不支持个人绑定")
+		return
+	}
 
 	code := ctx.Query("code")
 	state := ctx.Query("state")
@@ -384,6 +496,10 @@ func (c *NotificationController) HandleCallback(ctx *gin.Context) {
 	bindState, exists := c.manager.GetBindState(state)
 	if !exists || time.Now().After(bindState.Expires) {
 		ctx.String(http.StatusBadRequest, "二维码已过期，请重新扫码")
+		return
+	}
+	if bindState.Channel != channelType {
+		ctx.String(http.StatusBadRequest, "绑定渠道不匹配")
 		return
 	}
 
@@ -421,6 +537,7 @@ func SendNotificationToAgent(agentID uint, title, content string) error {
 	}
 
 	manager := notification.GetManager()
+	loadNotificationConfigs(manager)
 
 	for _, channelType := range notification.GetSupportedChannels() {
 		if !manager.IsEnabled(channelType) {

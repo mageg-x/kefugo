@@ -39,7 +39,7 @@ class ApiService {
         return response
       },
       error => {
-        const apiError = toApiError(error, '请求失败')
+        const apiError = toApiError(error)
         if (shouldResetAuth(apiError.code)) {
           this.removeToken()
           if (window.location.pathname !== '/login') {
@@ -466,19 +466,19 @@ class ApiService {
 
   // 企业微信 - 客服绑定
   async getWecomQrcode() {
-    return this.api.get('/agent/wecom/qrcode')
+    return this.api.get('/agent/notification/channels/wecom/qrcode')
   }
 
   async getWecomBindStatus(state) {
-    return this.api.get('/agent/wecom/bind-status', { params: { state } })
+    return this.api.get('/agent/notification/channels/wecom/bind-status', { params: { state } })
   }
 
   async getWecomBindInfo() {
-    return this.api.get('/agent/wecom/bind-info')
+    return this.api.get('/agent/notification/channels/wecom/bind-info')
   }
 
   async unbindWecom() {
-    return this.api.post('/agent/wecom/unbind')
+    return this.api.post('/agent/notification/channels/wecom/unbind')
   }
 
   // 通知系统 - 管理员配置

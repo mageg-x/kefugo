@@ -16,6 +16,7 @@ import (
 
 	"kefu-server/config"
 	"kefu-server/models"
+	"kefu-server/service"
 	"kefu-server/store"
 	"kefu-server/utils"
 	"kefu-server/utils/logger"
@@ -87,6 +88,26 @@ func (uc *UploadController) create(c *gin.Context, needAuth bool) {
 		logger.Errorf("upload app query failed app_id=%s err=%v", appID, err)
 		response.ResponseError(c, http.StatusForbidden, response.ErrCodeUploadAppNotFoundDisabled)
 		return
+	}
+	if needAuth && authRole == "agent" {
+		userName, _ := getAuthUser(c)
+		userService := service.GetUserService()
+		if userService == nil {
+			logger.Errorf("upload user service unavailable user=%s app_id=%s", userName, appID)
+			response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeUserServiceUnavailable)
+			return
+		}
+		user, err := userService.GetUser(userName)
+		if err != nil || user == nil {
+			logger.Errorf("upload current user not found user=%s app_id=%s err=%v", userName, appID, err)
+			response.ResponseError(c, http.StatusUnauthorized, response.ErrCodeAuthContextMissing)
+			return
+		}
+		if !isAgentForApp(user.Apps, appID) {
+			logger.Errorf("upload app access denied user=%s app_id=%s", userName, appID)
+			response.ResponseError(c, http.StatusForbidden, response.ErrCodePermissionAppAccessDenied)
+			return
+		}
 	}
 
 	if !needAuth {

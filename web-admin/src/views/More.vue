@@ -438,7 +438,7 @@ import {
   Setting,
   Warning,
 } from "@element-plus/icons-vue";
-import { computed, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import api from "@/script/api";
@@ -498,6 +498,7 @@ const wecomBindState = ref("");
 const unbindingWecom = ref(false);
 const qrcodeContainer = ref(null);
 let wecomPollingTimer = null;
+let wecomPollingExpireTimer = null;
 
 const knowledgeDialogVisible = ref(false);
 const knowledgeLoading = ref(false);
@@ -1057,8 +1058,9 @@ async function saveSensitiveWords() {
 async function openWecomBindDialog() {
   wecomBindVisible.value = true;
   wecomBindStatus.value = t("pageMore.wecom.waiting");
-  // Default to configured mode, switch to not-configured only when backend returns CONFIG_MISSING.
+  // Default to configured mode, switch to not-configured only when backend returns a dedicated not-configured code.
   wecomConfigured.value = true;
+  stopWecomPolling();
   
   try {
     const bindInfoResp = await api.getWecomBindInfo();
@@ -1077,6 +1079,7 @@ async function openWecomBindDialog() {
         if (qrcodeData.corpId && qrcodeData.agentId) {
           wecomConfigured.value = true;
           wecomBindState.value = qrcodeData.state;
+          let qrReady = false;
           
           await new Promise(resolve => setTimeout(resolve, 100));
           
@@ -1092,15 +1095,18 @@ async function openWecomBindDialog() {
                 state: qrcodeData.state,
                 href: "",
               });
+              qrReady = true;
             } else {
               ElMessage.error(t("pageMore.toast.wecomSdkLoadFailed"));
             }
           }
           
-          startWecomPolling();
+          if (qrReady) {
+            startWecomPolling();
+          }
         }
       } catch (error) {
-        if (error?.code === 400 || error?.error === 'CONFIG_MISSING') {
+        if (error?.code === 32105 || error?.code === 32001) {
           wecomConfigured.value = false;
         } else {
           ElMessage.error(error.message || t("pageMore.toast.loadQrFailed"));
@@ -1114,6 +1120,9 @@ async function openWecomBindDialog() {
 
 function startWecomPolling() {
   stopWecomPolling();
+  if (!wecomBindState.value) {
+    return;
+  }
   
   wecomPollingTimer = setInterval(async () => {
     try {
@@ -1142,7 +1151,7 @@ function startWecomPolling() {
     }
   }, 2000);
   
-  setTimeout(() => {
+  wecomPollingExpireTimer = setTimeout(() => {
     stopWecomPolling();
     if (wecomBindStatus.value === t("pageMore.wecom.waiting")) {
       wecomBindStatus.value = t("pageMore.wecom.qrExpired");
@@ -1154,6 +1163,10 @@ function stopWecomPolling() {
   if (wecomPollingTimer) {
     clearInterval(wecomPollingTimer);
     wecomPollingTimer = null;
+  }
+  if (wecomPollingExpireTimer) {
+    clearTimeout(wecomPollingExpireTimer);
+    wecomPollingExpireTimer = null;
   }
 }
 
@@ -1219,6 +1232,10 @@ onMounted(() => {
     .catch(() => {});
   loadAiModelOptions();
   loadAiConfigFromSystemSettings();
+});
+
+onBeforeUnmount(() => {
+  stopWecomPolling();
 });
 </script>
 

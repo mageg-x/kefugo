@@ -351,7 +351,7 @@ func (ac *AdminPanelController) UserStats(c *gin.Context) {
 // GetSystemSettings 获取系统配置。
 func (ac *AdminPanelController) GetSystemSettings(c *gin.Context) {
 	userName, role := getAuthUser(c)
-	if role != "admin" && role != "agent" {
+	if role != "admin" {
 		logger.Errorf("system settings get forbidden user=%s role=%s", userName, role)
 		response.ResponseError(c, http.StatusForbidden, response.ErrCodeAdminForbidden)
 		return
@@ -362,7 +362,7 @@ func (ac *AdminPanelController) GetSystemSettings(c *gin.Context) {
 // UpdateSystemSettings 更新系统配置并刷新缓存。
 func (ac *AdminPanelController) UpdateSystemSettings(c *gin.Context) {
 	userName, role := getAuthUser(c)
-	if role != "admin" && role != "agent" {
+	if role != "admin" {
 		logger.Errorf("system settings update forbidden user=%s role=%s", userName, role)
 		response.ResponseError(c, http.StatusForbidden, response.ErrCodeAdminForbidden)
 		return

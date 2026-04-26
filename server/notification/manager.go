@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"kefu-server/models"
+	"kefu-server/store"
 	"kefu-server/utils/logger"
 )
 
@@ -22,12 +24,14 @@ type BindStateCache struct {
 }
 
 type BindState struct {
-	Status   string
-	UserID   string
-	AgentID  uint
-	Channel  ChannelType
-	Expires  time.Time
+	Status  string
+	UserID  string
+	AgentID uint
+	Channel ChannelType
+	Expires time.Time
 }
+
+const bindStateSettingPrefix = "notification_bind_state:"
 
 var globalManager *Manager
 var once sync.Once
@@ -52,9 +56,75 @@ func (m *Manager) cleanExpiredStates() {
 		for key, state := range m.bindStateCache.items {
 			if now.After(state.Expires) {
 				delete(m.bindStateCache.items, key)
+				m.deletePersistedBindState(key)
 			}
 		}
 		m.bindStateCache.mu.Unlock()
+	}
+}
+
+func bindStateSettingKey(state string) string {
+	return bindStateSettingPrefix + state
+}
+
+func (m *Manager) persistBindState(state string, bindState *BindState) {
+	if store.DB == nil || state == "" || bindState == nil {
+		return
+	}
+
+	valueBytes, err := json.Marshal(bindState)
+	if err != nil {
+		logger.Errorf("notification bind state marshal failed state=%s err=%v", state, err)
+		return
+	}
+
+	key := bindStateSettingKey(state)
+	var setting models.SystemSetting
+	result := store.DB.Where("key = ?", key).First(&setting)
+	if result.Error != nil {
+		setting.Key = key
+		setting.Value = string(valueBytes)
+		if err := store.DB.Create(&setting).Error; err != nil {
+			logger.Errorf("notification bind state create failed state=%s err=%v", state, err)
+		}
+		return
+	}
+
+	setting.Value = string(valueBytes)
+	if err := store.DB.Save(&setting).Error; err != nil {
+		logger.Errorf("notification bind state update failed state=%s err=%v", state, err)
+	}
+}
+
+func (m *Manager) loadPersistedBindState(state string) (*BindState, bool) {
+	if store.DB == nil || state == "" {
+		return nil, false
+	}
+
+	var setting models.SystemSetting
+	if err := store.DB.Where("key = ?", bindStateSettingKey(state)).First(&setting).Error; err != nil {
+		return nil, false
+	}
+
+	var bindState BindState
+	if err := json.Unmarshal([]byte(setting.Value), &bindState); err != nil {
+		logger.Errorf("notification bind state unmarshal failed state=%s err=%v", state, err)
+		m.deletePersistedBindState(state)
+		return nil, false
+	}
+	if time.Now().After(bindState.Expires) {
+		m.deletePersistedBindState(state)
+		return nil, false
+	}
+	return &bindState, true
+}
+
+func (m *Manager) deletePersistedBindState(state string) {
+	if store.DB == nil || state == "" {
+		return
+	}
+	if err := store.DB.Where("key = ?", bindStateSettingKey(state)).Delete(&models.SystemSetting{}).Error; err != nil {
+		logger.Errorf("notification bind state delete failed state=%s err=%v", state, err)
 	}
 }
 
@@ -68,18 +138,31 @@ func (m *Manager) LoadConfigs(configData map[string]interface{}) {
 		channelType := ChannelType(channelStr)
 		if cfgMap, ok := cfg.(map[string]interface{}); ok {
 			enabled := false
+			actualConfig := cfgMap
 			if e, ok := cfgMap["enabled"].(bool); ok {
 				enabled = e
+			}
+			if nested, ok := cfgMap["config"].(map[string]interface{}); ok {
+				actualConfig = nested
+			} else if _, ok := cfgMap["config"]; ok {
+				continue
 			}
 
 			config := &ChannelConfig{
 				Type:    channelType,
 				Enabled: enabled,
-				Config:  cfgMap,
+				Config:  actualConfig,
 			}
 
 			if metadata, ok := cfgMap["metadata"].(map[string]string); ok {
 				config.Metadata = metadata
+			} else if metadataMap, ok := cfgMap["metadata"].(map[string]interface{}); ok {
+				config.Metadata = make(map[string]string, len(metadataMap))
+				for k, v := range metadataMap {
+					if text, ok := v.(string); ok {
+						config.Metadata[k] = text
+					}
+				}
 			}
 
 			m.configs[channelType] = config
@@ -188,30 +271,53 @@ func (m *Manager) HandleCallback(channelType ChannelType, code, state string) (s
 
 func (m *Manager) StoreBindState(state string, bindState *BindState) {
 	m.bindStateCache.mu.Lock()
-	defer m.bindStateCache.mu.Unlock()
 	m.bindStateCache.items[state] = bindState
+	m.bindStateCache.mu.Unlock()
+	m.persistBindState(state, bindState)
 }
 
 func (m *Manager) GetBindState(state string) (*BindState, bool) {
 	m.bindStateCache.mu.RLock()
-	defer m.bindStateCache.mu.RUnlock()
 	item, exists := m.bindStateCache.items[state]
-	return item, exists
+	m.bindStateCache.mu.RUnlock()
+	if exists {
+		if time.Now().After(item.Expires) {
+			m.DeleteBindState(state)
+			return nil, false
+		}
+		return item, true
+	}
+
+	item, exists = m.loadPersistedBindState(state)
+	if !exists {
+		return nil, false
+	}
+
+	m.bindStateCache.mu.Lock()
+	m.bindStateCache.items[state] = item
+	m.bindStateCache.mu.Unlock()
+	return item, true
 }
 
 func (m *Manager) UpdateBindState(state string, status string, userID string) {
-	m.bindStateCache.mu.Lock()
-	defer m.bindStateCache.mu.Unlock()
-	if item, exists := m.bindStateCache.items[state]; exists {
-		item.Status = status
-		item.UserID = userID
+	item, exists := m.GetBindState(state)
+	if !exists || item == nil {
+		return
 	}
+	item.Status = status
+	item.UserID = userID
+
+	m.bindStateCache.mu.Lock()
+	m.bindStateCache.items[state] = item
+	m.bindStateCache.mu.Unlock()
+	m.persistBindState(state, item)
 }
 
 func (m *Manager) DeleteBindState(state string) {
 	m.bindStateCache.mu.Lock()
-	defer m.bindStateCache.mu.Unlock()
 	delete(m.bindStateCache.items, state)
+	m.bindStateCache.mu.Unlock()
+	m.deletePersistedBindState(state)
 }
 
 func (m *Manager) ToJSON() ([]byte, error) {
@@ -220,7 +326,14 @@ func (m *Manager) ToJSON() ([]byte, error) {
 
 	data := make(map[string]interface{})
 	for channelType, config := range m.configs {
-		data[string(channelType)] = config.Config
+		item := map[string]interface{}{
+			"enabled": config.Enabled,
+			"config":  config.Config,
+		}
+		if len(config.Metadata) > 0 {
+			item["metadata"] = config.Metadata
+		}
+		data[string(channelType)] = item
 	}
 
 	return json.Marshal(data)

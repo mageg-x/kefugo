@@ -132,8 +132,8 @@ func SetupRouter() *gin.Engine {
 				panel.GET("/visitors", middleware.RequireRoles("admin"), adminPanelController.Visitors)
 				panel.GET("/user-stats", middleware.RequireRoles("admin"), adminPanelController.UserStats)
 				panel.GET("/export/sessions", middleware.RequireRoles("admin"), adminPanelController.ExportSessions)
-				panel.GET("/settings", middleware.RequireRoles("agent", "admin"), adminPanelController.GetSystemSettings)
-				panel.PUT("/settings", middleware.RequireRoles("agent", "admin"), adminPanelController.UpdateSystemSettings)
+				panel.GET("/settings", middleware.RequireRoles("admin"), adminPanelController.GetSystemSettings)
+				panel.PUT("/settings", middleware.RequireRoles("admin"), adminPanelController.UpdateSystemSettings)
 				panel.GET("/profile-summary", middleware.RequireRoles("agent", "admin"), adminPanelController.ProfileSummary)
 			}
 

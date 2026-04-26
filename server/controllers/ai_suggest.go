@@ -53,6 +53,54 @@ func (ac *AISuggestController) Suggest(c *gin.Context) {
 		return
 	}
 
+	userName, role := getAuthUser(c)
+	if role == "agent" {
+		userService := service.GetUserService()
+		if userService == nil {
+			logger.Errorf("ai suggest user service unavailable user=%s sid=%s app_id=%s", userName, sid, appID)
+			response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeUserServiceUnavailable)
+			return
+		}
+		user, err := userService.GetUser(userName)
+		if err != nil || user == nil {
+			logger.Errorf("ai suggest current user not found user=%s sid=%s app_id=%s err=%v", userName, sid, appID, err)
+			response.ResponseError(c, http.StatusUnauthorized, response.ErrCodeAuthContextMissing)
+			return
+		}
+		if appID != "" && !isAgentForApp(user.Apps, appID) {
+			logger.Errorf("ai suggest app access denied user=%s app_id=%s", userName, appID)
+			response.ResponseError(c, http.StatusForbidden, response.ErrCodePermissionAppAccessDenied)
+			return
+		}
+		if sid != "" {
+			sessionService := service.GetSessionService()
+			if sessionService == nil {
+				logger.Errorf("ai suggest session service unavailable user=%s sid=%s", userName, sid)
+				response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeSessionServiceUnavailable)
+				return
+			}
+			session, err := sessionService.GetSession(sid)
+			if err != nil || session == nil {
+				logger.Errorf("ai suggest session not found user=%s sid=%s err=%v", userName, sid, err)
+				response.ResponseError(c, http.StatusNotFound, response.ErrCodeSessionNotFound)
+				return
+			}
+			if !isAgentForApp(user.Apps, session.AppID()) {
+				logger.Errorf("ai suggest session app access denied user=%s sid=%s app_id=%s", userName, sid, session.AppID())
+				response.ResponseError(c, http.StatusForbidden, response.ErrCodePermissionAppAccessDenied)
+				return
+			}
+			if session.CurAgentID != "" && session.CurAgentID != userName {
+				logger.Errorf("ai suggest session owner mismatch user=%s sid=%s owner=%s", userName, sid, session.CurAgentID)
+				response.ResponseError(c, http.StatusForbidden, response.ErrCodeSessionOwnerMismatch)
+				return
+			}
+			if appID == "" {
+				appID = strings.TrimSpace(session.AppID())
+			}
+		}
+	}
+
 	// 获取会话历史消息，提取访客最新问题
 	ms := getSessionMessages(c, sid, 20)
 	visitorText := ""
@@ -85,7 +133,6 @@ func (ac *AISuggestController) Suggest(c *gin.Context) {
 	model := defaultAIModel
 	prompt := defaultAIPrompt
 	source := aiSuggestSourceLocalFallback
-	userName, _ := getAuthUser(c)
 	if strings.TrimSpace(userName) != "" && store.DB != nil {
 		item := &models.AgentSetting{}
 		if err := store.DB.Where("user_name = ?", userName).First(item).Error; err == nil {

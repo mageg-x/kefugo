@@ -45,7 +45,7 @@ class Api {
       return response.data;
     } catch (error) {
       console.error("Failed to get config:", error);
-      throw toSdkError(error, "Failed to get config");
+      throw toSdkError(error);
     }
   }
 
@@ -74,7 +74,7 @@ class Api {
       });
       return response.data;
     } catch (error) {
-      throw toSdkError(error, "Upload failed");
+      throw toSdkError(error);
     }
   }
 
@@ -96,7 +96,7 @@ class Api {
       });
       return response.data;
     } catch (error) {
-      throw toSdkError(error, "Failed to get history");
+      throw toSdkError(error);
     }
   }
 

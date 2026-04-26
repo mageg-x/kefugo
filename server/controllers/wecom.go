@@ -78,6 +78,15 @@ type bindState struct {
 	expires time.Time
 }
 
+type bindStateRecord struct {
+	Status  string    `json:"status"`
+	UserID  string    `json:"user_id"`
+	AgentID uint      `json:"agent_id"`
+	Expires time.Time `json:"expires"`
+}
+
+const wecomBindStateSettingPrefix = "wecom_bind_state:"
+
 func init() {
 	go func() {
 		ticker := time.NewTicker(1 * time.Minute)
@@ -95,8 +104,112 @@ func cleanExpiredBindStates() {
 	for key, state := range bindStateCache.items {
 		if now.After(state.expires) {
 			delete(bindStateCache.items, key)
+			deletePersistedWecomBindState(key)
 		}
 	}
+}
+
+func wecomBindStateSettingKey(state string) string {
+	return wecomBindStateSettingPrefix + state
+}
+
+func persistWecomBindState(state string, item *bindState) {
+	if store.DB == nil || strings.TrimSpace(state) == "" || item == nil {
+		return
+	}
+
+	record := bindStateRecord{
+		Status:  item.status,
+		UserID:  item.userID,
+		AgentID: item.agentID,
+		Expires: item.expires,
+	}
+	valueBytes, err := json.Marshal(record)
+	if err != nil {
+		logger.Errorf("wecom bind state marshal failed state=%s err=%v", state, err)
+		return
+	}
+
+	key := wecomBindStateSettingKey(state)
+	var setting models.SystemSetting
+	result := store.DB.Where("key = ?", key).First(&setting)
+	if result.Error != nil {
+		setting.Key = key
+		setting.Value = string(valueBytes)
+		if err := store.DB.Create(&setting).Error; err != nil {
+			logger.Errorf("wecom bind state create failed state=%s err=%v", state, err)
+		}
+		return
+	}
+
+	setting.Value = string(valueBytes)
+	if err := store.DB.Save(&setting).Error; err != nil {
+		logger.Errorf("wecom bind state update failed state=%s err=%v", state, err)
+	}
+}
+
+func loadPersistedWecomBindState(state string) (*bindState, bool) {
+	if store.DB == nil || strings.TrimSpace(state) == "" {
+		return nil, false
+	}
+
+	var setting models.SystemSetting
+	if err := store.DB.Where("key = ?", wecomBindStateSettingKey(state)).First(&setting).Error; err != nil {
+		return nil, false
+	}
+
+	var record bindStateRecord
+	if err := json.Unmarshal([]byte(setting.Value), &record); err != nil {
+		logger.Errorf("wecom bind state unmarshal failed state=%s err=%v", state, err)
+		deletePersistedWecomBindState(state)
+		return nil, false
+	}
+	if time.Now().After(record.Expires) {
+		deletePersistedWecomBindState(state)
+		return nil, false
+	}
+
+	return &bindState{
+		status:  record.Status,
+		userID:  record.UserID,
+		agentID: record.AgentID,
+		expires: record.Expires,
+	}, true
+}
+
+func deletePersistedWecomBindState(state string) {
+	if store.DB == nil || strings.TrimSpace(state) == "" {
+		return
+	}
+	if err := store.DB.Where("key = ?", wecomBindStateSettingKey(state)).Delete(&models.SystemSetting{}).Error; err != nil {
+		logger.Errorf("wecom bind state delete failed state=%s err=%v", state, err)
+	}
+}
+
+func getWecomBindState(state string) (*bindState, bool) {
+	bindStateCache.mu.RLock()
+	item, exists := bindStateCache.items[state]
+	bindStateCache.mu.RUnlock()
+	if exists {
+		if time.Now().After(item.expires) {
+			bindStateCache.mu.Lock()
+			delete(bindStateCache.items, state)
+			bindStateCache.mu.Unlock()
+			deletePersistedWecomBindState(state)
+			return nil, false
+		}
+		return item, true
+	}
+
+	item, exists = loadPersistedWecomBindState(state)
+	if !exists {
+		return nil, false
+	}
+
+	bindStateCache.mu.Lock()
+	bindStateCache.items[state] = item
+	bindStateCache.mu.Unlock()
+	return item, true
 }
 
 func (c *WecomController) GetConfig(ctx *gin.Context) {
@@ -206,6 +319,15 @@ func (c *WecomController) GetQrcode(ctx *gin.Context) {
 	}
 
 	state := generateBindState(uid)
+	item := &bindState{
+		status:  "pending",
+		agentID: uid,
+		expires: time.Now().Add(5 * time.Minute),
+	}
+	bindStateCache.mu.Lock()
+	bindStateCache.items[state] = item
+	bindStateCache.mu.Unlock()
+	persistWecomBindState(state, item)
 
 	scheme := "http"
 	if ctx.Request.TLS != nil || ctx.GetHeader("X-Forwarded-Proto") == "https" {
@@ -231,16 +353,8 @@ func (c *WecomController) GetBindStatus(ctx *gin.Context) {
 		return
 	}
 
-	bindStateCache.mu.RLock()
-	item, exists := bindStateCache.items[state]
-	bindStateCache.mu.RUnlock()
-
+	item, exists := getWecomBindState(state)
 	if !exists {
-		ctx.JSON(http.StatusOK, gin.H{"code": 0, "data": wecomBindStatusResponse{Status: "expired", Error: "二维码已过期"}})
-		return
-	}
-
-	if time.Now().After(item.expires) {
 		ctx.JSON(http.StatusOK, gin.H{"code": 0, "data": wecomBindStatusResponse{Status: "expired", Error: "二维码已过期"}})
 		return
 	}
@@ -303,10 +417,7 @@ func (c *WecomController) Callback(ctx *gin.Context) {
 		return
 	}
 
-	bindStateCache.mu.RLock()
-	item, exists := bindStateCache.items[state]
-	bindStateCache.mu.RUnlock()
-
+	item, exists := getWecomBindState(state)
 	if !exists || time.Now().After(item.expires) {
 		ctx.String(http.StatusBadRequest, "二维码已过期，请重新扫码")
 		return
@@ -344,10 +455,16 @@ func (c *WecomController) Callback(ctx *gin.Context) {
 		return
 	}
 
+	successState := &bindState{
+		status:  "success",
+		userID:  userID,
+		agentID: item.agentID,
+		expires: item.expires,
+	}
 	bindStateCache.mu.Lock()
-	bindStateCache.items[state].status = "success"
-	bindStateCache.items[state].userID = userID
+	bindStateCache.items[state] = successState
 	bindStateCache.mu.Unlock()
+	persistWecomBindState(state, successState)
 
 	ctx.String(http.StatusOK, "绑定成功！您可以关闭此页面。")
 }
