@@ -664,12 +664,24 @@ function messageAvatar(msg) {
   if (msg?.isSelf) {
     return buildAvatarURL(currentUserName.value || "agent");
   }
+  if (msg?.business_type === BUSINESS_MESSAGE_TYPES.AGENT) {
+    return buildAvatarURL(msg?.sender_name || "agent");
+  }
+  if (msg?.business_type === BUSINESS_MESSAGE_TYPES.SYSTEM) {
+    return buildAvatarURL("system");
+  }
   return buildAvatarURL(selectedSession.value?.visitor_id || "visitor");
 }
 
 function messageDisplayName(msg) {
   if (msg?.isSelf) {
     return currentUserDisplayName.value;
+  }
+  if (msg?.business_type === BUSINESS_MESSAGE_TYPES.AGENT) {
+    return String(msg?.sender_name || t("role.agent"));
+  }
+  if (msg?.business_type === BUSINESS_MESSAGE_TYPES.SYSTEM) {
+    return "系统";
   }
   return selectedSession.value?.visitor_id || t("pageInbox.word.visitor");
 }
@@ -768,7 +780,10 @@ function toMessage(item) {
   if (!normalized) {
     return null;
   }
-  const msg = buildInboxUiMessageFromBusiness(normalized, { localId: createLocalId("hist") });
+  const msg = buildInboxUiMessageFromBusiness(normalized, {
+    localId: createLocalId("hist"),
+    currentUserName: currentUserName.value,
+  });
   return normalizeMessageMediaFields(msg);
 }
 
@@ -893,7 +908,7 @@ function sendText(text) {
     ...buildInboxUiMessageFromOutgoing(
       BUSINESS_CONTENT_TYPES.TEXT,
       { content, replyTo: currentReply },
-      { sid: selectedSession.value.sid, localId }
+      { sid: selectedSession.value.sid, localId, currentUserName: currentUserName.value }
     ),
     status: UI_MESSAGE_STATUS.SENDING,
     client_id: clientId,
@@ -1111,7 +1126,7 @@ async function sendFileMessage(file) {
         duration: 0,
         replyTo: currentReply,
       },
-      { sid: selectedSession.value.sid, localId }
+      { sid: selectedSession.value.sid, localId, currentUserName: currentUserName.value }
     ),
     status: UI_MESSAGE_STATUS.SENDING,
   });
@@ -1296,7 +1311,7 @@ async function uploadVoiceBlob(blob, mimeType) {
     ...normalizeMessageMediaFields(buildInboxUiMessageFromOutgoing(
       BUSINESS_CONTENT_TYPES.AUDIO,
       { url: previewURL, duration, replyTo: currentReply },
-      { sid: selectedSession.value.sid, localId }
+      { sid: selectedSession.value.sid, localId, currentUserName: currentUserName.value }
     )),
     status: UI_MESSAGE_STATUS.SENDING,
   });
@@ -1645,7 +1660,10 @@ function onIncomingMessage(message) {
     }
     return;
   }
-  const mapped = normalizeMessageMediaFields(buildInboxUiMessageFromBusiness(message, { localId: createLocalId("ws") }));
+  const mapped = normalizeMessageMediaFields(buildInboxUiMessageFromBusiness(message, {
+    localId: createLocalId("ws"),
+    currentUserName: currentUserName.value,
+  }));
   const streamEnabled = Boolean(message?.payload?.raw?.stream);
   const streamDelta = Boolean(message?.payload?.raw?.stream_delta);
   const streamFinal = Boolean(message?.payload?.raw?.stream_final);

@@ -23,7 +23,9 @@
   --td-font-size-body-medium: 12px;
   --td-chat-item-gap : 16px;
 }
-
+*::part(t-chat__item__inner){
+  margin-bottom : 16px !important;
+}
 *::part(t-chat__item__content__slot){
   margin-left: -24px !important;
   margin-top: 6px !important;
