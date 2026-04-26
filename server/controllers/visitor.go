@@ -22,6 +22,7 @@ import (
 	"kefu-server/store"
 	"kefu-server/utils"
 	"kefu-server/utils/logger"
+	"kefu-server/utils/response"
 )
 
 // WebSocket消息类型常量定义
@@ -445,13 +446,13 @@ type aiBotTestRequest struct {
 func (vc *VisitorController) AIBotTest(c *gin.Context) {
 	var req aiBotTestRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 10001, "msg": "invalid params"})
+		response.ResponseError(c, http.StatusBadRequest, response.ErrCodeInvalidParams)
 		return
 	}
 	appID := strings.TrimSpace(req.AppID)
 	query := strings.TrimSpace(req.Query)
 	if appID == "" || query == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 10001, "msg": "app_id/query required"})
+		response.ResponseErrorWithMsg(c, http.StatusBadRequest, response.ErrCodeInvalidParams, "app_id/query required")
 		return
 	}
 
@@ -463,12 +464,8 @@ func (vc *VisitorController) AIBotTest(c *gin.Context) {
 		answer = "未生成有效答案，请检查知识库或模型配置。"
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"code": 0,
-		"msg":  "success",
-		"data": gin.H{
-			"suggestion": answer,
-		},
+	response.ResponseSuccess(c, gin.H{
+		"suggestion": answer,
 	})
 }
 
@@ -495,7 +492,7 @@ func (vc *VisitorController) History(c *gin.Context) {
 	// 必填参数校验
 	if visitorID == "" || appID == "" {
 		logger.Errorf("visitor history params missing visitor_id=%s app_id=%s", visitorID, appID)
-		c.JSON(http.StatusBadRequest, gin.H{"code": 10001, "msg": "invalid params"})
+		response.ResponseError(c, http.StatusBadRequest, response.ErrCodeInvalidParams)
 		return
 	}
 
@@ -504,7 +501,7 @@ func (vc *VisitorController) History(c *gin.Context) {
 	referer := c.GetHeader("Referer")
 	if !vc.isValidOrigin(appID, origin, referer) {
 		logger.Errorf("visitor history origin forbidden app_id=%s origin=%s referer=%s", appID, origin, referer)
-		c.JSON(http.StatusForbidden, gin.H{"code": 13004, "msg": "domain not allowed"})
+		response.ResponseError(c, http.StatusForbidden, response.ErrCodeSecurityDomainNotAllowed)
 		return
 	}
 
@@ -513,7 +510,7 @@ func (vc *VisitorController) History(c *gin.Context) {
 	ms := service.GetMsgService()
 	if ss == nil || ms == nil {
 		logger.Errorf("visitor history service unavailable visitor_id=%s app_id=%s", visitorID, appID)
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 10005, "msg": "service unavailable"})
+		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeServiceUnavailable)
 		return
 	}
 
@@ -521,7 +518,7 @@ func (vc *VisitorController) History(c *gin.Context) {
 	session, err := ss.GetOrCreateSession(visitorID, appID)
 	if err != nil || session == nil {
 		logger.Errorf("visitor history get session failed visitor_id=%s app_id=%s err=%v", visitorID, appID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 22003, "msg": "session not found"})
+		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeSessionNotFound)
 		return
 	}
 
@@ -529,7 +526,7 @@ func (vc *VisitorController) History(c *gin.Context) {
 	msgs, err := ms.GetMessagesBySessionBeforeSnapshot(session.SID, before, limit, time.Now().Unix())
 	if err != nil {
 		logger.Errorf("visitor history get messages failed sid=%s err=%v", session.SID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"code": 23009, "msg": "query failed"})
+		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeMessageFetchFailed)
 		return
 	}
 
@@ -582,14 +579,10 @@ func (vc *VisitorController) History(c *gin.Context) {
 	}
 
 	logger.Infof("visitor history success sid=%s visitor_id=%s app_id=%s msg_count=%d", session.SID, visitorID, appID, len(rows))
-	c.JSON(http.StatusOK, gin.H{
-		"code": 0,
-		"msg":  "success",
-		"data": gin.H{
-			"sid":         session.SID,
-			"messages":    rows,
-			"next_cursor": nextCursor,
-		},
+	response.ResponseSuccess(c, gin.H{
+		"sid":         session.SID,
+		"messages":    rows,
+		"next_cursor": nextCursor,
 	})
 }
 
@@ -1023,7 +1016,7 @@ func (vc *VisitorController) handleMessage(sessionID, msgType string, payloadByt
 		notifyAgentUnavailableChannels(session, &msg)
 	} else {
 		// 未分配会话固定广播给所有在线客服（不再受“新会话通知”开关影响）
-			PushMessageToAllOnlineAgents(session.SID, session.AppID(), &msg)
+		PushMessageToAllOnlineAgents(session.SID, session.AppID(), &msg)
 		// 仅在未启用 AI 机器人自动应答时，提示客服繁忙。
 		if !shouldTriggerAIBot {
 			PushMessageToVisitor(session.VisitorID(), session.SID, &models.Message{

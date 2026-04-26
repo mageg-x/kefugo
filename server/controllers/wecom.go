@@ -16,6 +16,7 @@ import (
 	"kefu-server/models"
 	"kefu-server/store"
 	"kefu-server/utils/logger"
+	"kefu-server/utils/response"
 )
 
 type WecomController struct{}
@@ -229,13 +230,13 @@ func (c *WecomController) GetConfig(ctx *gin.Context) {
 		CallbackURL: callbackURL,
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"code": 0, "data": resp})
+	response.ResponseSuccess(ctx, resp)
 }
 
 func (c *WecomController) SaveConfig(ctx *gin.Context) {
 	var req wecomConfigRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "参数错误"})
+		response.ResponseError(ctx, http.StatusBadRequest, response.ErrCodeWecomConfigInvalid)
 		return
 	}
 
@@ -246,7 +247,7 @@ func (c *WecomController) SaveConfig(ctx *gin.Context) {
 
 	cfgBytes, err := json.Marshal(cfg)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "配置序列化失败"})
+		response.ResponseError(ctx, http.StatusInternalServerError, response.ErrCodeWecomConfigSerializeFailed)
 		return
 	}
 
@@ -256,32 +257,32 @@ func (c *WecomController) SaveConfig(ctx *gin.Context) {
 		setting.Key = "system_settings"
 		setting.Value = string(cfgBytes)
 		if err := store.DB.Create(&setting).Error; err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "保存配置失败"})
+			response.ResponseError(ctx, http.StatusInternalServerError, response.ErrCodeWecomConfigSaveFailed)
 			return
 		}
 	} else {
 		setting.Value = string(cfgBytes)
 		if err := store.DB.Save(&setting).Error; err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "更新配置失败"})
+			response.ResponseError(ctx, http.StatusInternalServerError, response.ErrCodeWecomConfigUpdateFailed)
 			return
 		}
 	}
 
 	setSystemSettingsCache(cfg)
-	ctx.JSON(http.StatusOK, gin.H{"code": 0, "message": "保存成功"})
+	response.ResponseSuccessWithMsg(ctx, "保存成功", nil)
 }
 
 func (c *WecomController) TestConnection(ctx *gin.Context) {
 	var req wecomTestRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "参数错误"})
+		response.ResponseError(ctx, http.StatusBadRequest, response.ErrCodeWecomConfigInvalid)
 		return
 	}
 
 	corpID := strings.TrimSpace(req.CorpID)
 	secret := strings.TrimSpace(req.Secret)
 	if corpID == "" || secret == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "CorpID 和 Secret 不能为空"})
+		response.ResponseError(ctx, http.StatusBadRequest, response.ErrCodeWecomCredentialsRequired)
 		return
 	}
 
@@ -294,7 +295,7 @@ func (c *WecomController) TestConnection(ctx *gin.Context) {
 			Success: false,
 			Error:   fmt.Sprintf("连接测试失败: %v", err),
 		}
-		ctx.JSON(http.StatusOK, gin.H{"code": 0, "data": resp})
+		response.ResponseSuccess(ctx, resp)
 		return
 	}
 
@@ -302,19 +303,19 @@ func (c *WecomController) TestConnection(ctx *gin.Context) {
 		Success: true,
 		Name:    "企业微信连接成功",
 	}
-	ctx.JSON(http.StatusOK, gin.H{"code": 0, "data": resp})
+	response.ResponseSuccess(ctx, resp)
 }
 
 func (c *WecomController) GetQrcode(ctx *gin.Context) {
 	uid, ok := getAuthUserID(ctx)
 	if !ok {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "未登录"})
+		response.ResponseError(ctx, http.StatusUnauthorized, response.ErrCodeAuthUnauthorized)
 		return
 	}
 
 	cfg := getSystemSettingsCached()
 	if cfg.WecomCorpID == "" || cfg.WecomSecret == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "error": "CONFIG_MISSING", "message": "企业微信功能未配置，请联系管理员"})
+		response.ResponseError(ctx, http.StatusBadRequest, response.ErrCodeWecomNotConfigured)
 		return
 	}
 
@@ -343,19 +344,19 @@ func (c *WecomController) GetQrcode(ctx *gin.Context) {
 		State:       state,
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"code": 0, "data": resp})
+	response.ResponseSuccess(ctx, resp)
 }
 
 func (c *WecomController) GetBindStatus(ctx *gin.Context) {
 	state := ctx.Query("state")
 	if state == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "缺少 state 参数"})
+		response.ResponseError(ctx, http.StatusBadRequest, response.ErrCodeWecomBindStateRequired)
 		return
 	}
 
 	item, exists := getWecomBindState(state)
 	if !exists {
-		ctx.JSON(http.StatusOK, gin.H{"code": 0, "data": wecomBindStatusResponse{Status: "expired", Error: "二维码已过期"}})
+		response.ResponseSuccess(ctx, wecomBindStatusResponse{Status: "expired", Error: "二维码已过期"})
 		return
 	}
 
@@ -364,19 +365,19 @@ func (c *WecomController) GetBindStatus(ctx *gin.Context) {
 		UserID: item.userID,
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"code": 0, "data": resp})
+	response.ResponseSuccess(ctx, resp)
 }
 
 func (c *WecomController) GetBindInfo(ctx *gin.Context) {
 	uid, ok := getAuthUserID(ctx)
 	if !ok {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "未登录"})
+		response.ResponseError(ctx, http.StatusUnauthorized, response.ErrCodeAuthUnauthorized)
 		return
 	}
 
 	var user models.User
 	if err := store.DB.First(&user, uid).Error; err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "查询用户失败"})
+		response.ResponseError(ctx, http.StatusInternalServerError, response.ErrCodeWecomBindInfoFailed)
 		return
 	}
 
@@ -386,13 +387,13 @@ func (c *WecomController) GetBindInfo(ctx *gin.Context) {
 		BindTime: user.WecomBindTime,
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"code": 0, "data": resp})
+	response.ResponseSuccess(ctx, resp)
 }
 
 func (c *WecomController) Unbind(ctx *gin.Context) {
 	uid, ok := getAuthUserID(ctx)
 	if !ok {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "未登录"})
+		response.ResponseError(ctx, http.StatusUnauthorized, response.ErrCodeAuthUnauthorized)
 		return
 	}
 
@@ -401,11 +402,11 @@ func (c *WecomController) Unbind(ctx *gin.Context) {
 		"wecom_bind_status": 0,
 		"wecom_bind_time":   nil,
 	}).Error; err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "解绑失败"})
+		response.ResponseError(ctx, http.StatusInternalServerError, response.ErrCodeWecomUnbindFailed)
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"code": 0, "message": "解绑成功"})
+	response.ResponseSuccessWithMsg(ctx, "解绑成功", nil)
 }
 
 func (c *WecomController) Callback(ctx *gin.Context) {

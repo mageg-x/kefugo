@@ -173,7 +173,7 @@ func (c *NotificationController) GetChannels(ctx *gin.Context) {
 		result = append(result, config)
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"code": 0, "data": result})
+	response.ResponseSuccess(ctx, result)
 }
 
 func (c *NotificationController) GetChannelConfig(ctx *gin.Context) {
@@ -216,7 +216,7 @@ func (c *NotificationController) GetChannelConfig(ctx *gin.Context) {
 	host := ctx.Request.Host
 	result["callbackUrl"] = fmt.Sprintf("%s://%s/api/notification/callback/%s", scheme, host, channelStr)
 
-	ctx.JSON(http.StatusOK, gin.H{"code": 0, "data": result})
+	response.ResponseSuccess(ctx, result)
 }
 
 func hasSecret(config map[string]interface{}) bool {
@@ -266,7 +266,7 @@ func (c *NotificationController) SaveChannelConfig(ctx *gin.Context) {
 	configData := buildNotificationSettingsPayload(c.manager)
 	configBytes, err := json.Marshal(configData)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "配置序列化失败"})
+		response.ResponseError(ctx, http.StatusInternalServerError, response.ErrCodeSystemSettingsSaveFailed)
 		return
 	}
 
@@ -276,18 +276,18 @@ func (c *NotificationController) SaveChannelConfig(ctx *gin.Context) {
 		setting.Key = "notification_settings"
 		setting.Value = string(configBytes)
 		if err := store.DB.Create(&setting).Error; err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "保存配置失败"})
+			response.ResponseError(ctx, http.StatusInternalServerError, response.ErrCodeSystemSettingsSaveFailed)
 			return
 		}
 	} else {
 		setting.Value = string(configBytes)
 		if err := store.DB.Save(&setting).Error; err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "更新配置失败"})
+			response.ResponseError(ctx, http.StatusInternalServerError, response.ErrCodeSystemSettingsSaveFailed)
 			return
 		}
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"code": 0, "message": "保存成功"})
+	response.ResponseSuccessWithMsg(ctx, "保存成功", nil)
 }
 
 func (c *NotificationController) TestChannel(ctx *gin.Context) {
@@ -296,34 +296,28 @@ func (c *NotificationController) TestChannel(ctx *gin.Context) {
 
 	notifier, exists := notification.GetNotifier(channelType)
 	if !exists {
-		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "不支持的通知渠道"})
+		response.ResponseError(ctx, http.StatusBadRequest, response.ErrCodeNotificationChannelUnsupported)
 		return
 	}
 
 	var req ChannelConfigRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "参数错误"})
+		response.ResponseError(ctx, http.StatusBadRequest, response.ErrCodeInvalidParams)
 		return
 	}
 
 	err := notifier.TestConnection(req.Config)
 	if err != nil {
-		ctx.JSON(http.StatusOK, gin.H{
-			"code": 0,
-			"data": map[string]interface{}{
-				"success": false,
-				"error":   err.Error(),
-			},
+		response.ResponseSuccess(ctx, map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
 		})
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"code": 0,
-		"data": map[string]interface{}{
-			"success": true,
-			"message": "连接成功",
-		},
+	response.ResponseSuccess(ctx, map[string]interface{}{
+		"success": true,
+		"message": "连接成功",
 	})
 }
 
@@ -359,7 +353,7 @@ func (c *NotificationController) GetBindQrcode(ctx *gin.Context) {
 	notifier, _ := notification.GetNotifier(channelType)
 	bindURL, state, err := notifier.GetBindURL(config.Config, uid, callbackURL)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": err.Error()})
+		response.ResponseErrorWithMsg(ctx, http.StatusInternalServerError, response.ErrCodeNotificationBindFailed, err.Error())
 		return
 	}
 
@@ -370,10 +364,7 @@ func (c *NotificationController) GetBindQrcode(ctx *gin.Context) {
 		Expires: time.Now().Add(5 * time.Minute),
 	})
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"code": 0,
-		"data": buildBindQrcodePayload(channelType, bindURL, state),
-	})
+	response.ResponseSuccess(ctx, buildBindQrcodePayload(channelType, bindURL, state))
 }
 
 func (c *NotificationController) GetBindStatus(ctx *gin.Context) {
@@ -391,33 +382,24 @@ func (c *NotificationController) GetBindStatus(ctx *gin.Context) {
 
 	bindState, exists := c.manager.GetBindState(state)
 	if !exists {
-		ctx.JSON(http.StatusOK, gin.H{
-			"code": 0,
-			"data": map[string]interface{}{
-				"status": "expired",
-				"error":  "二维码已过期",
-			},
+		response.ResponseSuccess(ctx, map[string]interface{}{
+			"status": "expired",
+			"error":  "二维码已过期",
 		})
 		return
 	}
 
 	if time.Now().After(bindState.Expires) {
-		ctx.JSON(http.StatusOK, gin.H{
-			"code": 0,
-			"data": map[string]interface{}{
-				"status": "expired",
-				"error":  "二维码已过期",
-			},
+		response.ResponseSuccess(ctx, map[string]interface{}{
+			"status": "expired",
+			"error":  "二维码已过期",
 		})
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"code": 0,
-		"data": map[string]interface{}{
-			"status": bindState.Status,
-			"userId": bindState.UserID,
-		},
+	response.ResponseSuccess(ctx, map[string]interface{}{
+		"status": bindState.Status,
+		"userId": bindState.UserID,
 	})
 }
 
@@ -436,17 +418,14 @@ func (c *NotificationController) GetBindInfo(ctx *gin.Context) {
 
 	var user models.User
 	if err := store.DB.First(&user, uid).Error; err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "查询用户失败"})
+		response.ResponseError(ctx, http.StatusInternalServerError, response.ErrCodeNotificationBindInfoFailed)
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{
-		"code": 0,
-		"data": map[string]interface{}{
-			"isBound":  user.WecomBindStatus == 1,
-			"userId":   user.WecomUserID,
-			"bindTime": user.WecomBindTime,
-		},
+	response.ResponseSuccess(ctx, map[string]interface{}{
+		"isBound":  user.WecomBindStatus == 1,
+		"userId":   user.WecomUserID,
+		"bindTime": user.WecomBindTime,
 	})
 }
 
@@ -470,11 +449,11 @@ func (c *NotificationController) Unbind(ctx *gin.Context) {
 	}
 
 	if err := store.DB.Model(&models.User{}).Where("id = ?", uid).Updates(updates).Error; err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"code": 500, "message": "解绑失败"})
+		response.ResponseError(ctx, http.StatusInternalServerError, response.ErrCodeNotificationUnbindFailed)
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"code": 0, "message": "解绑成功"})
+	response.ResponseSuccessWithMsg(ctx, "解绑成功", nil)
 }
 
 func (c *NotificationController) HandleCallback(ctx *gin.Context) {
