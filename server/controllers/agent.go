@@ -140,6 +140,32 @@ func getAgentConnSnapshotByApp(appID string) []*AgentConn {
 	return result
 }
 
+func getAdminConnSnapshot(excludeAgentIDs ...string) []*AgentConn {
+	excluded := make(map[string]struct{}, len(excludeAgentIDs))
+	for _, agentID := range excludeAgentIDs {
+		agentID = strings.TrimSpace(agentID)
+		if agentID != "" {
+			excluded[agentID] = struct{}{}
+		}
+	}
+
+	agentConns.mu.RLock()
+	defer agentConns.mu.RUnlock()
+
+	result := make([]*AgentConn, 0, len(agentConns.conns))
+	for agentID, connSet := range agentConns.conns {
+		if _, skip := excluded[agentID]; skip {
+			continue
+		}
+		for conn := range connSet {
+			if conn != nil && conn.Role == "admin" {
+				result = append(result, conn)
+			}
+		}
+	}
+	return result
+}
+
 // PushMessageToAllOnlineAgents 向所有在线客服广播消息
 // 用于未分配会话的新会话实时通知，让所有客服都能看到新会话提示
 // 这是实现"有新会话了"功能的关键函数
@@ -198,6 +224,29 @@ func PushMessageToAgent(agentID, sessionID string, msg *models.Message) {
 			logger.Debugf("agent msg sent agent_id=%s sid=%s msg_id=%s", agentID, sessionID, msg.MsgID)
 		default:
 			logger.Warnf("agent msg send buffer full agent_id=%s sid=%s", agentID, sessionID)
+		}
+	}
+}
+
+func PushMessageToOnlineAdmins(sessionID string, msg *models.Message, excludeAgentIDs ...string) {
+	if strings.TrimSpace(sessionID) == "" || msg == nil {
+		return
+	}
+	conns := getAdminConnSnapshot(excludeAgentIDs...)
+	if len(conns) == 0 {
+		return
+	}
+
+	sidEncoded := utils.Base58Encode([]byte(sessionID))
+	packet := models.BuildOutgoingWSPacket(models.WSMessageTypeVisitor, msg, sidEncoded)
+	payload, _ := json.Marshal(packet)
+
+	for _, conn := range conns {
+		select {
+		case conn.SendChan <- payload:
+			logger.Debugf("admin observer msg sent agent_id=%s sid=%s msg_id=%s", conn.AgentID, sessionID, msg.MsgID)
+		default:
+			logger.Warnf("admin observer msg send buffer full agent_id=%s sid=%s", conn.AgentID, sessionID)
 		}
 	}
 }
@@ -528,10 +577,6 @@ func (ac *AgentController) handleMessage(conn *AgentConn, sessionID, actionType 
 
 		// 推送消息给访客
 		PushMessageToVisitor(session.VisitorID(), sessionID, &msg)
-		if isAdmin && strings.TrimSpace(session.CurAgentID) != "" && session.CurAgentID != agentID {
-			PushMessageToAgent(session.CurAgentID, sessionID, &msg)
-		}
-
 	case MessageTypeAgentTyping:
 		// 客服正在输入，推送给访客
 		PushTypingToVisitor(session.VisitorID(), sessionID)
@@ -548,9 +593,6 @@ func (ac *AgentController) handleMessage(conn *AgentConn, sessionID, actionType 
 		// 推送会话结束消息给访客和客服
 		PushMessageToVisitor(session.VisitorID(), sessionID, systemMsg)
 		PushMessageToAgent(agentID, sessionID, systemMsg)
-		if isAdmin && strings.TrimSpace(session.CurAgentID) != "" && session.CurAgentID != agentID {
-			PushMessageToAgent(session.CurAgentID, sessionID, systemMsg)
-		}
 
 	default:
 		logger.Debugf("agent action unhandled type=%s agent_id=%s sid=%s", actionType, agentID, sessionID)

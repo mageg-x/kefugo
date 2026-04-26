@@ -1015,6 +1015,7 @@ func (vc *VisitorController) handleMessage(sessionID, msgType string, payloadByt
 	if session.CurAgentID != "" {
 		// 已有分配客服，直接推送消息给客服
 		PushMessageToAgent(session.AgentID(), session.SID, &msg)
+		PushMessageToOnlineAdmins(session.SID, &msg, session.AgentID())
 		// 统一通知触发条件：客服不在线或不在席时，触发邮件+企微通知
 		notifyAgentUnavailableChannels(session, &msg)
 	} else {
