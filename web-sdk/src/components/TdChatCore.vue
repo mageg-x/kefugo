@@ -1506,12 +1506,20 @@ function handleSend(value) {
 function pickImageFiles() {
   showEmojiPicker.value = false;
   filePickerAccept.value = "image/*";
+  if (filePickerRef.value) {
+    filePickerRef.value.accept = "image/*";
+    filePickerRef.value.value = "";
+  }
   filePickerRef.value?.click();
 }
 
 function pickAnyFiles() {
   showEmojiPicker.value = false;
   filePickerAccept.value = accept.value;
+  if (filePickerRef.value) {
+    filePickerRef.value.accept = accept.value;
+    filePickerRef.value.value = "";
+  }
   filePickerRef.value?.click();
 }
 
@@ -1600,6 +1608,8 @@ async function submitRate() {
   try {
     const resp = await api.rateSession({
       sid: sessionId.value,
+      appId: props.appId,
+      visitorId: visitorId.value,
       score: Number(rateScore.value || 0),
       comment: String(rateComment.value || ""),
     });

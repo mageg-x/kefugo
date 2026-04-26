@@ -100,12 +100,14 @@ class Api {
     }
   }
 
-  async rateSession({ sid, score, comment = "" }) {
-    if (!sid) {
-      throw new Error("sid required");
+  async rateSession({ sid, appId, visitorId, score, comment = "" }) {
+    if (!sid || !appId || !visitorId) {
+      throw new Error("sid/appId/visitorId required");
     }
     return this.api.post("/api/v1/sessions/rate", {
       sid,
+      app_id: String(appId || ""),
+      visitor_id: String(visitorId || ""),
       score: Number(score || 0),
       comment: String(comment || ""),
     });

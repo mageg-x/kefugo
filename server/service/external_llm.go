@@ -274,7 +274,7 @@ func (c *ExternalLLMClient) Generate(ctx context.Context, messages []ExternalCha
 		return "", fmt.Errorf("llm http %d: %s", resp.StatusCode, msg)
 	}
 	if out.Error != nil && strings.TrimSpace(out.Error.Message) != "" {
-		return "", fmt.Errorf(strings.TrimSpace(out.Error.Message))
+		return "", fmt.Errorf("%s", strings.TrimSpace(out.Error.Message))
 	}
 	if len(out.Choices) == 0 {
 		return "", fmt.Errorf("llm empty choices")
@@ -367,7 +367,7 @@ func (c *ExternalLLMClient) GenerateStream(
 			continue
 		}
 		if out.Error != nil && strings.TrimSpace(out.Error.Message) != "" {
-			return "", fmt.Errorf(strings.TrimSpace(out.Error.Message))
+			return "", fmt.Errorf("%s", strings.TrimSpace(out.Error.Message))
 		}
 		if len(out.Choices) == 0 {
 			continue

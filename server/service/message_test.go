@@ -73,10 +73,10 @@ func TestGetMessagesBySessionBefore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetMessagesBySessionBefore with cursor failed: %v", err)
 	}
-	if len(rows2) != 4 {
-		t.Fatalf("expected 4 rows before cursor (inclusive), got %d", len(rows2))
+	if len(rows2) != 3 {
+		t.Fatalf("expected 3 rows before cursor (exclusive), got %d", len(rows2))
 	}
-	if rows2[2].MsgID != msgIDs[2] || rows2[3].MsgID != msgIDs[3] {
-		t.Fatalf("unexpected cursor result tail: %s ... %s", rows2[2].MsgID, rows2[3].MsgID)
+	if rows2[0].MsgID != msgIDs[0] || rows2[2].MsgID != msgIDs[2] {
+		t.Fatalf("unexpected cursor result tail: %s ... %s", rows2[0].MsgID, rows2[2].MsgID)
 	}
 }

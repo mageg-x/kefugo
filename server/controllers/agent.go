@@ -118,12 +118,68 @@ func getAgentConnSnapshot(agentID string) []*AgentConn {
 	return result
 }
 
+func getAgentConnSnapshotByApp(appID string) []*AgentConn {
+	appID = strings.TrimSpace(appID)
+	if appID == "" {
+		return nil
+	}
+
+	userService := service.GetUserService()
+	if userService == nil {
+		logger.Errorf("agent conn snapshot by app unavailable app_id=%s", appID)
+		return nil
+	}
+
+	agentConns.mu.RLock()
+	agentIDs := make([]string, 0, len(agentConns.conns))
+	for agentID := range agentConns.conns {
+		agentIDs = append(agentIDs, agentID)
+	}
+	agentConns.mu.RUnlock()
+
+	allowed := make(map[string]struct{}, len(agentIDs))
+	for _, agentID := range agentIDs {
+		user, err := userService.GetUser(agentID)
+		if err != nil || user == nil {
+			continue
+		}
+		if isAgentForApp(user.Apps, appID) {
+			allowed[agentID] = struct{}{}
+		}
+	}
+	if len(allowed) == 0 {
+		return nil
+	}
+
+	agentConns.mu.RLock()
+	defer agentConns.mu.RUnlock()
+
+	result := make([]*AgentConn, 0, len(agentConns.conns))
+	for agentID, connSet := range agentConns.conns {
+		if _, ok := allowed[agentID]; !ok {
+			continue
+		}
+		for conn := range connSet {
+			if conn != nil {
+				result = append(result, conn)
+			}
+		}
+	}
+	return result
+}
+
 // PushMessageToAllOnlineAgents 向所有在线客服广播消息
 // 用于未分配会话的新会话实时通知，让所有客服都能看到新会话提示
 // 这是实现"有新会话了"功能的关键函数
-func PushMessageToAllOnlineAgents(sessionID string, msg *models.Message) {
-	if strings.TrimSpace(sessionID) == "" || msg == nil {
+func PushMessageToAllOnlineAgents(sessionID, appID string, msg *models.Message) {
+	if strings.TrimSpace(sessionID) == "" || strings.TrimSpace(appID) == "" || msg == nil {
 		logger.Debugf("agent broadcast skip: empty session_id or msg")
+		return
+	}
+
+	conns := getAgentConnSnapshotByApp(appID)
+	if len(conns) == 0 {
+		logger.Debugf("agent broadcast skip: no eligible online connection app_id=%s sid=%s", appID, sessionID)
 		return
 	}
 
@@ -133,23 +189,16 @@ func PushMessageToAllOnlineAgents(sessionID string, msg *models.Message) {
 	packet := models.BuildOutgoingWSPacket(models.WSMessageTypeVisitor, msg, sidEncoded)
 	payload, _ := json.Marshal(packet)
 
-	agentConns.mu.RLock()
-	defer agentConns.mu.RUnlock()
-
-	// 遍历所有客服连接
-	for agentID, connSet := range agentConns.conns {
-		for conn := range connSet {
-			if conn == nil {
-				continue
-			}
-			// 尝试非阻塞发送消息到SendChan
-			select {
-			case conn.SendChan <- payload:
-				logger.Debugf("agent broadcast sent agent_id=%s sid=%s", agentID, sessionID)
-			default:
-				// 发送缓冲区满，跳过这次发送
-				logger.Warnf("agent broadcast send buffer full agent_id=%s sid=%s", agentID, sessionID)
-			}
+	// 遍历符合应用权限的在线客服连接
+	for _, conn := range conns {
+		if conn == nil {
+			continue
+		}
+		select {
+		case conn.SendChan <- payload:
+			logger.Debugf("agent broadcast sent agent_id=%s app_id=%s sid=%s", conn.AgentID, appID, sessionID)
+		default:
+			logger.Warnf("agent broadcast send buffer full agent_id=%s app_id=%s sid=%s", conn.AgentID, appID, sessionID)
 		}
 	}
 }
@@ -444,28 +493,6 @@ func (ac *AgentController) handleMessage(agentID, sessionID, actionType string, 
 		payload, err := models.ParseWSMessagePayload(payloadBytes)
 		if err != nil {
 			logger.Errorf("agent payload parse failed agent_id=%s sid=%s err=%v", agentID, sessionID, err)
-			return
-		}
-
-		// 检查访客是否在线，离线则拒绝发送
-		if !IsVisitorSessionOnline(sessionID) {
-			logger.Warnf("agent send blocked: visitor offline agent_id=%s sid=%s", agentID, sessionID)
-			blockPayload := map[string]interface{}{
-				"from":         "system",
-				"content_type": models.WSContentTypeText,
-				"content":      "访客当前不在线，消息未发送",
-				"code":         "visitor_offline_blocked",
-				"client_id":    strings.TrimSpace(payload.ClientID),
-				"timestamp":    now,
-			}
-			blockBytes, _ := json.Marshal(blockPayload)
-			blockMsg := models.Message{
-				MsgType:   models.WSMessageTypeSystem,
-				Content:   "访客当前不在线，消息未发送",
-				Meta:      string(blockBytes),
-				Timestamp: now,
-			}
-			PushMessageToAgent(agentID, sessionID, &blockMsg)
 			return
 		}
 

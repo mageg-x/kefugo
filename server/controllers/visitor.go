@@ -1023,7 +1023,7 @@ func (vc *VisitorController) handleMessage(sessionID, msgType string, payloadByt
 		notifyAgentUnavailableChannels(session, &msg)
 	} else {
 		// 未分配会话固定广播给所有在线客服（不再受“新会话通知”开关影响）
-		PushMessageToAllOnlineAgents(session.SID, &msg)
+			PushMessageToAllOnlineAgents(session.SID, session.AppID(), &msg)
 		// 仅在未启用 AI 机器人自动应答时，提示客服繁忙。
 		if !shouldTriggerAIBot {
 			PushMessageToVisitor(session.VisitorID(), session.SID, &models.Message{

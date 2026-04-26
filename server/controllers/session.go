@@ -328,18 +328,21 @@ func (sc *SessionController) List(c *gin.Context) {
 // appIDFilter: 请求中指定的应用ID筛选
 // 返回值：(可访问的应用ID列表, 是否应用筛选)
 func resolveAccessibleAppIDs(role string, currentAgent *models.User, appIDFilter string) ([]string, bool) {
-	// 如果请求指定了具体应用ID，直接使用
 	filteredAppID := strings.TrimSpace(appIDFilter)
-	if filteredAppID != "" {
-		return []string{filteredAppID}, true
-	}
-
-	// 非agent/admin角色不能访问会话列表
 	if role != "agent" && role != "admin" {
+		if filteredAppID != "" {
+			return []string{filteredAppID}, true
+		}
 		return nil, false
 	}
 	if currentAgent == nil {
 		return nil, false
+	}
+	if filteredAppID != "" {
+		if isAgentForApp(currentAgent.Apps, filteredAppID) {
+			return []string{filteredAppID}, true
+		}
+		return []string{}, true
 	}
 
 	// 解析用户所属应用列表
@@ -658,6 +661,11 @@ func (sc *SessionController) Transfer(c *gin.Context) {
 		response.ResponseError(c, http.StatusBadRequest, response.ErrCodeSessionTransferTargetInvalid)
 		return
 	}
+	if !isAgentForApp(target.Apps, session.AppID()) {
+		logger.Errorf("session transfer target app denied sid=%s target=%s app_id=%s", req.SID, req.ToAgentName, session.AppID())
+		response.ResponseError(c, http.StatusBadRequest, response.ErrCodeSessionTransferTargetInvalid)
+		return
+	}
 
 	// 执行转接
 	now := time.Now().Unix()
@@ -972,9 +980,11 @@ func (sc *SessionController) Rate(c *gin.Context) {
 
 	// 解析请求参数
 	var req struct {
-		SID     string `json:"sid" binding:"required"`
-		Score   int    `json:"score" binding:"required,min=1,max=5"`
-		Comment string `json:"comment"`
+		SID       string `json:"sid" binding:"required"`
+		AppID     string `json:"app_id" binding:"required"`
+		VisitorID string `json:"visitor_id" binding:"required"`
+		Score     int    `json:"score" binding:"required,min=1,max=5"`
+		Comment   string `json:"comment"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.Errorf("session rate params invalid user=%s err=%v", userName, err)
@@ -988,6 +998,27 @@ func (sc *SessionController) Rate(c *gin.Context) {
 	if err != nil || session == nil {
 		logger.Errorf("session rate target not found sid=%s err=%v", req.SID, err)
 		response.ResponseError(c, http.StatusNotFound, response.ErrCodeSessionNotFound)
+		return
+	}
+	req.AppID = strings.TrimSpace(req.AppID)
+	req.VisitorID = strings.TrimSpace(req.VisitorID)
+	if session.AppID() != req.AppID || session.VisitorID() != req.VisitorID {
+		logger.Errorf("session rate owner mismatch sid=%s app_id=%s visitor_id=%s", req.SID, req.AppID, req.VisitorID)
+		response.ResponseError(c, http.StatusForbidden, response.ErrCodeSessionAccessDenied)
+		return
+	}
+
+	app := models.GetApp(req.AppID)
+	if app == nil {
+		logger.Errorf("session rate app not found sid=%s app_id=%s", req.SID, req.AppID)
+		response.ResponseError(c, http.StatusNotFound, response.ErrCodeAppNotFound)
+		return
+	}
+	origin := c.GetHeader("Origin")
+	referer := c.GetHeader("Referer")
+	if !models.IsDomainAllowed(origin, referer, app.AllowDomain) {
+		logger.Errorf("session rate origin forbidden sid=%s app_id=%s origin=%s referer=%s", req.SID, req.AppID, origin, referer)
+		response.ResponseError(c, http.StatusForbidden, response.ErrCodePermissionAppAccessDenied)
 		return
 	}
 

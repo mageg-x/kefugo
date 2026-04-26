@@ -60,7 +60,7 @@
       </div>
     </aside>
 
-    <main class="inbox-chat">
+    <main ref="inboxChatRef" class="inbox-chat" :class="{ 'chat-wide': isChatWide }">
       <template v-if="selectedSession">
         <header class="chat-head">
           <button type="button" class="visitor-trigger" @click="openVisitorDrawer">
@@ -454,6 +454,7 @@ const historyLoading = ref(false);
 const inputMessage = ref("");
 const wsStatus = ref("disconnected");
 const wsClient = ref(null);
+const inboxChatRef = ref(null);
 const messageContainerRef = ref(null);
 const statusFilter = ref("");
 const assignedFilter = ref("");
@@ -507,6 +508,8 @@ const agentSettings = ref({
   aiEnabled: false,
 });
 const lastNotifyAtBySid = new Map();
+const isChatWide = ref(false);
+let inboxChatResizeObserver = null;
 
 const activeCount = computed(() => sessions.value.filter((s) => s.status === "assigned").length);
 const unassignedCount = computed(() => sessions.value.filter((s) => s.status === "unassigned").length);
@@ -1005,6 +1008,10 @@ async function confirmTransfer() {
 
 function pickFile(accept) {
   fileAccept.value = accept;
+  if (fileInputRef.value) {
+    fileInputRef.value.accept = accept;
+    fileInputRef.value.value = "";
+  }
   fileInputRef.value?.click();
 }
 
@@ -1823,8 +1830,24 @@ function initWS() {
   wsClient.value.connect();
 }
 
+function syncChatWideState() {
+  const width = Number(inboxChatRef.value?.clientWidth || 0);
+  isChatWide.value = width >= 800;
+}
+
 onMounted(async () => {
   initWS();
+  syncChatWideState();
+  if (typeof ResizeObserver !== "undefined") {
+    inboxChatResizeObserver = new ResizeObserver(() => {
+      syncChatWideState();
+    });
+    if (inboxChatRef.value) {
+      inboxChatResizeObserver.observe(inboxChatRef.value);
+    }
+  } else {
+    window.addEventListener("resize", syncChatWideState);
+  }
   await loadAgentSettings();
   await reloadSessions();
   await loadAppOptions();
@@ -1838,6 +1861,12 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   wsClient.value?.disconnect();
+  if (inboxChatResizeObserver) {
+    inboxChatResizeObserver.disconnect();
+    inboxChatResizeObserver = null;
+  } else {
+    window.removeEventListener("resize", syncChatWideState);
+  }
   for (const timer of typingTimers.values()) clearTimeout(timer);
   typingTimers.clear();
   for (const t of retryTimers.values()) clearTimeout(t);
@@ -2026,8 +2055,6 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow: hidden;
   background: #ffffff;
-  container-type: inline-size;
-  container-name: inbox-chat;
 }
 
 .chat-head {
@@ -2596,28 +2623,26 @@ onBeforeUnmount(() => {
   overflow-wrap: anywhere;
 }
 
-@container inbox-chat (min-width: 800px) {
-  :deep(.t-chat-message--user),
-  :deep(.t-chat__item__role--user) {
-    flex-direction: row-reverse !important;
-    justify-content: flex-start !important;
-  }
+.inbox-chat.chat-wide :deep(.t-chat-message--user),
+.inbox-chat.chat-wide :deep(.t-chat__item__role--user) {
+  flex-direction: row-reverse !important;
+  justify-content: flex-start !important;
+}
 
-  :deep(.t-chat-message__main),
-  :deep(.t-chat__item__main) {
-    max-width: min(82%, 860px);
-  }
+.inbox-chat.chat-wide :deep(.t-chat-message__main),
+.inbox-chat.chat-wide :deep(.t-chat__item__main) {
+  max-width: min(82%, 860px);
+}
 
-  :deep(.t-chat-message--user .t-chat-message__main),
-  :deep(.t-chat__item__role--user .t-chat__item__main) {
-    align-items: flex-end;
-    margin-left: auto;
-  }
+.inbox-chat.chat-wide :deep(.t-chat-message--user .t-chat-message__main),
+.inbox-chat.chat-wide :deep(.t-chat__item__role--user .t-chat__item__main) {
+  align-items: flex-end;
+  margin-left: auto;
+}
 
-  :deep(.t-chat-message--user .t-chat-message__content),
-  :deep(.t-chat__item__role--user .t-chat__item__content) {
-    align-items: flex-end;
-  }
+.inbox-chat.chat-wide :deep(.t-chat-message--user .t-chat-message__content),
+.inbox-chat.chat-wide :deep(.t-chat__item__role--user .t-chat__item__content) {
+  align-items: flex-end;
 }
 
 :deep(.t-chat-message__actionbar) {
@@ -2681,15 +2706,19 @@ onBeforeUnmount(() => {
   padding: 4px 0;
   background: transparent;
   border: none;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 .kefu-tool-btn {
-  flex: 1;
+  flex: 0 0 auto;
   border: none;
   background: transparent;
   color: #5b6b7c;
   border-radius: 8px;
-  padding: 8px 4px;
+  padding: 8px 8px;
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
@@ -2699,6 +2728,7 @@ onBeforeUnmount(() => {
   gap: 4px;
   transition: all 0.2s ease;
   position: relative;
+  white-space: nowrap;
 }
 
 .kefu-tool-btn:hover:not(:disabled) {
@@ -2730,6 +2760,7 @@ onBeforeUnmount(() => {
   height: 22px;
   border-radius: 6px;
   transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .kefu-tool-btn:hover:not(:disabled) .kefu-tool-icon {
