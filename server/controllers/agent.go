@@ -20,7 +20,7 @@ import (
 // 客服WebSocket消息类型常量定义
 // 用于区分不同类型的WebSocket消息，便于在消息处理流程中进行路由分发
 const (
-	MessageTypeRsp         = models.WSMessageTypeAgent // 客服发送的回复消息类型
+	MessageTypeRsp         = models.WSMessageTypeAgent  // 客服发送的回复消息类型
 	MessageTypeAgentTyping = models.WSMessageTypeTyping // 客服正在输入状态通知
 )
 
@@ -29,7 +29,7 @@ const (
 // 注意：一个客服可以有多个连接（如多设备登录），所以使用map来管理
 type AgentConn struct {
 	Conn     *websocket.Conn // 底层的WebSocket连接对象
-	AgentID  string           // 客服唯一标识（用户名）
+	AgentID  string          // 客服唯一标识（用户名）
 	SendChan chan []byte     // 异步消息发送通道，writeLoop从此通道读取消息并发送给客服
 	Done     chan struct{}   // 连接生命周期管理通道，连接断开时关闭
 }
@@ -241,8 +241,8 @@ func PushTypingToAgent(agentID, sessionID string) {
 
 	// 构建typing通知的消息体
 	payloadBytes, _ := json.Marshal(map[string]interface{}{
-		"from":      "visitor",               // 标识消息来源为访客
-		"timestamp": time.Now().Unix(),       // 当前时间戳
+		"from":      "visitor",         // 标识消息来源为访客
+		"timestamp": time.Now().Unix(), // 当前时间戳
 	})
 
 	// 构建WebSocket数据包
@@ -542,7 +542,7 @@ func (ac *AgentController) handleMessage(agentID, sessionID, actionType string, 
 		msg.MsgID = msgID
 
 		// 更新会话状态：回复消息视为已读，未读计数清零
-		session.OnAgentReply(now)
+		session.OnAgentReply(now, msg.MsgID)
 		session.TouchMessage(payload.ContentType, payload.Content, now)
 		_ = ss.SaveSession(session)
 		invalidateSessionListCache()

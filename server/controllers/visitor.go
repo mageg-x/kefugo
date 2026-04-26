@@ -920,7 +920,7 @@ func (vc *VisitorController) handleMessage(sessionID, msgType string, payloadByt
 	}
 
 	// 只有真实消息才计入访客未读与会话状态推进
-	session.OnVisitorMessage(now)
+	session.OnVisitorMessage(now, "")
 
 	ms := service.GetMsgService()
 	if ms == nil {
@@ -978,6 +978,7 @@ func (vc *VisitorController) handleMessage(sessionID, msgType string, payloadByt
 		return
 	}
 	msg.MsgID = msgID
+	session.MarkVisitorMessage(msg.MsgID)
 
 	// 更新会话的最后消息信息
 	session.TouchMessage(payload.ContentType, payload.Content, now)
@@ -1088,19 +1089,26 @@ func buildAIBotReplyInflightKey(sessionID, triggerMsgID, question string, trigge
 	return sessionID + "|" + strconv.FormatInt(triggerTs, 10) + "|" + question
 }
 
-func (vc *VisitorController) canContinueAIBotReply(session *models.Session, triggerTs int64, cfg systemSettings) bool {
+func (vc *VisitorController) canContinueAIBotReply(session *models.Session, triggerMsgID string, triggerTs int64, cfg systemSettings) bool {
 	if session == nil || session.Closed {
 		return false
 	}
+	triggerMsgID = strings.TrimSpace(triggerMsgID)
 	if !cfg.AIBotWhenAssigned && strings.TrimSpace(session.CurAgentID) != "" {
 		return false
 	}
 	// 会话里已经出现更新的访客消息，当前这次生成已过时，避免旧答案覆盖新问题。
-	if triggerTs > 0 && session.LastVisitorMsgTime > triggerTs {
+	if triggerMsgID != "" && session.LastVisitorMsgID != "" && session.LastVisitorMsgID > triggerMsgID {
+		return false
+	}
+	if triggerMsgID == "" && triggerTs > 0 && session.LastVisitorMsgTime > triggerTs {
 		return false
 	}
 	// 若客服或机器人已经对这条消息之后做过回复，也不再发送陈旧答案。
-	if triggerTs > 0 && session.LastAgentReplyTime > triggerTs {
+	if triggerMsgID != "" && session.LastAgentReplyMsgID != "" && session.LastAgentReplyMsgID > triggerMsgID {
+		return false
+	}
+	if triggerMsgID == "" && triggerTs > 0 && session.LastAgentReplyTime > triggerTs {
 		return false
 	}
 	return true
@@ -1132,7 +1140,7 @@ func (vc *VisitorController) dispatchAIBotReply(sessionID, triggerMsgID, questio
 		logger.Errorf("ai bot dispatch session not found sid=%s err=%v", sessionID, err)
 		return
 	}
-	if !vc.canContinueAIBotReply(session, triggerTs, cfg) {
+	if !vc.canContinueAIBotReply(session, triggerMsgID, triggerTs, cfg) {
 		return
 	}
 
@@ -1148,7 +1156,7 @@ func (vc *VisitorController) dispatchAIBotReply(sessionID, triggerMsgID, questio
 			cancel()
 			return false
 		}
-		if !vc.canContinueAIBotReply(latest, triggerTs, cfg) {
+		if !vc.canContinueAIBotReply(latest, triggerMsgID, triggerTs, cfg) {
 			cancel()
 			return false
 		}
@@ -1168,7 +1176,7 @@ func (vc *VisitorController) dispatchAIBotReply(sessionID, triggerMsgID, questio
 		logger.Errorf("ai bot reload session failed sid=%s err=%v", sessionID, err)
 		return
 	}
-	if !vc.canContinueAIBotReply(latest, triggerTs, cfg) {
+	if !vc.canContinueAIBotReply(latest, triggerMsgID, triggerTs, cfg) {
 		return
 	}
 	session = latest
@@ -1205,7 +1213,7 @@ func (vc *VisitorController) dispatchAIBotReply(sessionID, triggerMsgID, questio
 	msg.MsgID = msgID
 
 	// 机器人已完成回复，清理未读并更新会话摘要。
-	session.OnAgentReply(now)
+	session.OnAgentReply(now, msg.MsgID)
 	session.TouchMessage(models.WSContentTypeText, answer, now)
 	if err := ss.SaveSession(session); err != nil {
 		logger.Errorf("ai bot save session failed sid=%s err=%v", sessionID, err)

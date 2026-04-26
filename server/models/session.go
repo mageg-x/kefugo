@@ -24,7 +24,9 @@ type Session struct {
 	LastDevice          string `json:"last_device,omitempty"`
 	LastGeo             string `json:"last_geo,omitempty"`
 	LastVisitorMsgTime  int64  `json:"last_visitor_msg_time"`             // 最后访客消息时间
+	LastVisitorMsgID    string `json:"last_visitor_msg_id,omitempty"`     // 最后访客消息ID
 	LastAgentReplyTime  int64  `json:"last_agent_reply_time"`             // 最后客服回复消息时间
+	LastAgentReplyMsgID string `json:"last_agent_reply_msg_id,omitempty"` // 最后客服/机器人回复消息ID
 	LastAgentReadTime   int64  `json:"last_agent_read_time"`              // 最后客服已读消息时间
 	LastMessage         string `json:"last_message,omitempty"`            // 最近一条消息摘要
 	LastMessageType     string `json:"last_message_type,omitempty"`       // 最近一条消息类型
@@ -50,21 +52,23 @@ func GetSessionID(visitorID, appID string, sessionSeq uint32) string {
 }
 
 // 1. 访客发消息
-func (s *Session) OnVisitorMessage(ts int64) {
+func (s *Session) OnVisitorMessage(ts int64, msgID string) {
 	if s.Closed {
 		return
 	}
 	s.LastVisitorMsgTime = ts
+	s.MarkVisitorMessage(msgID)
 	s.LastActiveAt = ts
 	s.UnreadCount++
 }
 
 // 2. 客服发送普通回复
-func (s *Session) OnAgentReply(ts int64) {
+func (s *Session) OnAgentReply(ts int64, msgID string) {
 	if s.Closed {
 		return
 	}
 	s.LastAgentReplyTime = ts
+	s.MarkAgentReplyMessage(msgID)
 	s.LastAgentReadTime = ts // 回复即视为已读
 	s.LastActiveAt = ts
 	s.UnreadCount = 0
@@ -116,6 +120,7 @@ func (s *Session) ReopenByVisitor(ts int64) {
 	s.FollowUp = false
 	s.CurAgentID = ""
 	s.LastAgentReplyTime = 0
+	s.LastAgentReplyMsgID = ""
 	s.LastAgentReadTime = 0
 	if ts > 0 {
 		s.LastActiveAt = ts
@@ -155,6 +160,26 @@ func (s *Session) MarkVisitorDelivered(msgID string) {
 	}
 }
 
+func (s *Session) MarkVisitorMessage(msgID string) {
+	msgID = strings.TrimSpace(msgID)
+	if msgID == "" {
+		return
+	}
+	if s.LastVisitorMsgID == "" || msgID > s.LastVisitorMsgID {
+		s.LastVisitorMsgID = msgID
+	}
+}
+
+func (s *Session) MarkAgentReplyMessage(msgID string) {
+	msgID = strings.TrimSpace(msgID)
+	if msgID == "" {
+		return
+	}
+	if s.LastAgentReplyMsgID == "" || msgID > s.LastAgentReplyMsgID {
+		s.LastAgentReplyMsgID = msgID
+	}
+}
+
 func (s *Session) Rate(score int, comment string, ts int64) bool {
 	if score < 1 || score > 5 {
 		return false
@@ -175,6 +200,11 @@ func (s *Session) Status() string {
 	}
 	if s.LastVisitorMsgTime > s.LastAgentReadTime {
 		return SessionStatusUnRead
+	}
+	if s.LastVisitorMsgID != "" && s.LastAgentReplyMsgID != "" {
+		if s.LastVisitorMsgID > s.LastAgentReplyMsgID {
+			return SessionStatusUnReply
+		}
 	}
 	if s.LastVisitorMsgTime > s.LastAgentReplyTime {
 		return SessionStatusUnReply
