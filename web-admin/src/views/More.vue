@@ -438,7 +438,7 @@ import {
   Setting,
   Warning,
 } from "@element-plus/icons-vue";
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 import api from "@/script/api";

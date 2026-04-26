@@ -237,65 +237,67 @@
             </div>
             <button type="button" class="reply-bar-cancel" @click="cancelReply">×</button>
           </div>
-          <t-chat-sender v-model="inputMessage" :placeholder="sendHintText" :disabled="!canSend()"
-            :send-btn-disabled="!canSend()" @send="(val) => sendText(val)">
-            <template #footer-prefix>
-              <div class="kefu-input-toolbar">
-                <button type="button" class="kefu-tool-btn" :disabled="!canSend()"
-                  :title="t('pageInbox.action.quickReply')" :aria-label="t('pageInbox.action.quickReply')"
-                  @click="openSnippetDialog = true">
-                  <span class="kefu-tool-icon">
-                    <MessageSquare :size="16" />
-                  </span>
-                  <span>{{ t("pageInbox.action.quickReply") }}</span>
-                </button>
-                <button type="button" class="kefu-tool-btn" :disabled="!canSend() || aiSuggestLoading"
-                  :title="t('pageInbox.action.aiSuggest')" :aria-label="t('pageInbox.action.aiSuggest')"
-                  @click="applyAISuggest">
-                  <span class="kefu-tool-icon">
-                    <Brain :size="16" />
-                  </span>
-                  <span>{{ t("pageInbox.action.aiSuggest") }}</span>
-                </button>
-                <button type="button" class="kefu-tool-btn" :disabled="!canSend()" :title="t('message.image')"
-                  :aria-label="t('message.image')" @click="pickFile('image/*')">
-                  <span class="kefu-tool-icon">
-                    <ImagePlus :size="16" />
-                  </span>
-                  <span>{{ t("message.image") }}</span>
-                </button>
-                <button type="button" class="kefu-tool-btn" :disabled="!canSend()" :title="t('message.file')"
-                  :aria-label="t('message.file')" @click="pickFile('*/*')">
-                  <span class="kefu-tool-icon">
-                    <FileText :size="16" />
-                  </span>
-                  <span>{{ t("message.file") }}</span>
-                </button>
-                <button type="button" class="kefu-tool-btn" :disabled="!canSend() || !isRecordSupported"
-                  :class="{ active: isRecording }"
-                  :title="isRecordSupported ? t('voice.holdToRecord', '按住录音，松开发送，移出取消') : t('voice.notSupported', '此浏览器不支持录音')"
-                  :aria-label="t('pageInbox.action.record')" @mousedown.prevent="handlePressRecordStart"
-                  @mouseup.prevent="handlePressRecordStop" @mouseleave.prevent="handlePressRecordCancel"
-                  @touchstart.prevent="handlePressRecordStart" @touchend.prevent="handlePressRecordStop"
-                  @touchcancel.prevent="handlePressRecordCancel">
-                  <span class="kefu-tool-icon" v-if="!isRecording">
-                    <Mic :size="16" />
-                  </span>
-                  <span class="kefu-tool-icon kefu-recording-pulse" v-else>
-                    <MicOff :size="16" />
-                  </span>
-                  <span>{{ isRecording ? t("action.send") : t("pageInbox.action.record") }}</span>
-                </button>
-                <button type="button" class="kefu-tool-btn" :disabled="!canSend()" :title="t('pageInbox.action.emoji')"
-                  :aria-label="t('pageInbox.action.emoji')" @click="toggleEmojiPicker">
-                  <span class="kefu-tool-icon">
-                    <SmilePlus :size="16" />
-                  </span>
-                  <span>{{ t("pageInbox.action.emoji") }}</span>
-                </button>
-              </div>
-            </template>
-          </t-chat-sender>
+          <div class="chat-sender-host" @paste.capture="handleSenderPaste">
+            <t-chat-sender v-model="inputMessage" :placeholder="sendHintText" :disabled="!canSend()"
+              :send-btn-disabled="!canSend()" @send="(val) => sendText(val)">
+              <template #footer-prefix>
+                <div class="kefu-input-toolbar">
+                  <button type="button" class="kefu-tool-btn" :disabled="!canSend()"
+                    :title="t('pageInbox.action.quickReply')" :aria-label="t('pageInbox.action.quickReply')"
+                    @click="openSnippetDialog = true">
+                    <span class="kefu-tool-icon">
+                      <MessageSquare :size="16" />
+                    </span>
+                    <span>{{ t("pageInbox.action.quickReply") }}</span>
+                  </button>
+                  <button type="button" class="kefu-tool-btn" :disabled="!canSend() || aiSuggestLoading"
+                    :title="t('pageInbox.action.aiSuggest')" :aria-label="t('pageInbox.action.aiSuggest')"
+                    @click="applyAISuggest">
+                    <span class="kefu-tool-icon">
+                      <Brain :size="16" />
+                    </span>
+                    <span>{{ t("pageInbox.action.aiSuggest") }}</span>
+                  </button>
+                  <button type="button" class="kefu-tool-btn" :disabled="!canSend()" :title="t('message.image')"
+                    :aria-label="t('message.image')" @click="pickFile('image/*')">
+                    <span class="kefu-tool-icon">
+                      <ImagePlus :size="16" />
+                    </span>
+                    <span>{{ t("message.image") }}</span>
+                  </button>
+                  <button type="button" class="kefu-tool-btn" :disabled="!canSend()" :title="t('message.file')"
+                    :aria-label="t('message.file')" @click="pickFile('*/*')">
+                    <span class="kefu-tool-icon">
+                      <FileText :size="16" />
+                    </span>
+                    <span>{{ t("message.file") }}</span>
+                  </button>
+                  <button type="button" class="kefu-tool-btn" :disabled="!canSend() || !isRecordSupported"
+                    :class="{ active: isRecording }"
+                    :title="isRecordSupported ? t('voice.holdToRecord', '按住录音，松开发送，移出取消') : t('voice.notSupported', '此浏览器不支持录音')"
+                    :aria-label="t('pageInbox.action.record')" @mousedown.prevent="handlePressRecordStart"
+                    @mouseup.prevent="handlePressRecordStop" @mouseleave.prevent="handlePressRecordCancel"
+                    @touchstart.prevent="handlePressRecordStart" @touchend.prevent="handlePressRecordStop"
+                    @touchcancel.prevent="handlePressRecordCancel">
+                    <span class="kefu-tool-icon" v-if="!isRecording">
+                      <Mic :size="16" />
+                    </span>
+                    <span class="kefu-tool-icon kefu-recording-pulse" v-else>
+                      <MicOff :size="16" />
+                    </span>
+                    <span>{{ isRecording ? t("action.send") : t("pageInbox.action.record") }}</span>
+                  </button>
+                  <button type="button" class="kefu-tool-btn" :disabled="!canSend()" :title="t('pageInbox.action.emoji')"
+                    :aria-label="t('pageInbox.action.emoji')" @click="toggleEmojiPicker">
+                    <span class="kefu-tool-icon">
+                      <SmilePlus :size="16" />
+                    </span>
+                    <span>{{ t("pageInbox.action.emoji") }}</span>
+                  </button>
+                </div>
+              </template>
+            </t-chat-sender>
+          </div>
           <div class="send-row">
             <span class="ws-status" :class="wsStatus">{{ wsStatusText }}</span>
           </div>
@@ -1015,6 +1017,54 @@ function pickFile(accept) {
   fileInputRef.value?.click();
 }
 
+function inferFileExtension(mimeType) {
+  const normalized = String(mimeType || "").trim().toLowerCase();
+  if (!normalized) return "bin";
+  const direct = normalized.split("/")[1] || "";
+  if (direct.includes("png")) return "png";
+  if (direct.includes("jpeg") || direct.includes("jpg")) return "jpg";
+  if (direct.includes("gif")) return "gif";
+  if (direct.includes("webp")) return "webp";
+  if (direct.includes("bmp")) return "bmp";
+  if (direct.includes("svg")) return "svg";
+  if (direct.includes("pdf")) return "pdf";
+  if (direct.includes("plain")) return "txt";
+  if (direct.includes("json")) return "json";
+  if (direct.includes("zip")) return "zip";
+  if (direct.includes("mpeg")) return "mp3";
+  if (direct.includes("ogg")) return "ogg";
+  if (direct.includes("wav")) return "wav";
+  if (direct.includes("webm")) return "webm";
+  if (direct.includes("mp4")) return "mp4";
+  return direct.replace(/[^a-z0-9]+/g, "") || "bin";
+}
+
+function ensureClipboardFileName(file) {
+  if (!file) return null;
+  if (String(file.name || "").trim()) return file;
+  const isImage = String(file.type || "").startsWith("image/");
+  const isAudio = String(file.type || "").startsWith("audio/");
+  const extension = inferFileExtension(file.type);
+  const prefix = isImage ? "pasted_image" : isAudio ? "pasted_audio" : "pasted_file";
+  return new window.File([file], `${prefix}_${Date.now()}.${extension}`, {
+    type: file.type || "application/octet-stream",
+    lastModified: Date.now(),
+  });
+}
+
+function extractClipboardFiles(event) {
+  const clipboardData = event?.clipboardData;
+  if (!clipboardData) return [];
+  const files = [];
+  for (const item of Array.from(clipboardData.items || [])) {
+    if (item?.kind !== "file") continue;
+    const file = ensureClipboardFileName(item.getAsFile());
+    if (file) files.push(file);
+  }
+  if (files.length > 0) return files;
+  return Array.from(clipboardData.files || []).map(ensureClipboardFileName).filter(Boolean);
+}
+
 function toggleEmojiPicker() {
   showEmojiPicker.value = !showEmojiPicker.value;
 }
@@ -1045,12 +1095,9 @@ async function uploadPickedFile(file, contentType) {
   return data;
 }
 
-async function onPickedFile(event) {
-  const file = event.target.files?.[0];
-  if (!file || !selectedSession.value) return;
-  event.target.value = "";
+async function sendFileMessage(file) {
+  if (!file || !selectedSession.value || !canSend()) return;
   const previewUrl = URL.createObjectURL(file);
-
   const localId = createLocalId("out");
   const contentType = detectContentType(file);
   const currentReply = replyTo.value ? { ...replyTo.value } : null;
@@ -1135,6 +1182,29 @@ async function onPickedFile(event) {
       URL.revokeObjectURL(previewUrl);
     }
   }
+}
+
+async function handlePickedFiles(fileList) {
+  const files = Array.from(fileList || []);
+  for (const file of files) {
+    await sendFileMessage(file);
+  }
+}
+
+async function onPickedFile(event) {
+  const files = event.target.files;
+  event.target.value = "";
+  if (!files || files.length === 0) return;
+  await handlePickedFiles(files);
+}
+
+function handleSenderPaste(event) {
+  if (!canSend()) return;
+  const files = extractClipboardFiles(event);
+  if (files.length === 0) return;
+  event.preventDefault();
+  showEmojiPicker.value = false;
+  void handlePickedFiles(files);
 }
 
 function retryMessage(msg) {

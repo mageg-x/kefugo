@@ -132,49 +132,51 @@
       <button type="button" class="kefu-reply-bar-cancel" @click="cancelReply">×</button>
     </div>
 
-    <t-chat-sender v-model="inputValue" :placeholder="inputPlaceholder || t('input.placeholder', '输入消息...')"
-      :disabled="disabled" :loading="isRecording" :send-btn-disabled="disabled" @send="handleSend">
-      <template #footer-prefix>
-        <div class="kefu-input-toolbar">
-          <button type="button" class="kefu-tool-btn" :disabled="disabled" :title="t('message.image', '图片')"
-            :aria-label="t('message.image', '图片')" @click="pickImageFiles">
-            <span class="kefu-tool-icon">
-              <ImageIcon :size="18" />
-            </span>
-            <span>{{ t('message.image', '图片') }}</span>
-          </button>
-          <button type="button" class="kefu-tool-btn" :disabled="disabled" :title="t('message.file', '文件')"
-            :aria-label="t('message.file', '文件')" @click="pickAnyFiles">
-            <span class="kefu-tool-icon">
-              <FileText :size="18" />
-            </span>
-            <span>{{ t('message.file', '文件') }}</span>
-          </button>
-          <button type="button" class="kefu-tool-btn" :disabled="disabled || !isVoiceSupported"
-            :class="{ active: isRecording }"
-            :title="isVoiceSupported ? t('voice.holdToRecord', '按住录音，松开发送，移出取消') : t('voice.notSupported', '此浏览器不支持录音')"
-            :aria-label="t('pageInbox.action.record', '录音')" @mousedown.prevent="handlePressRecordStart"
-            @mouseup.prevent="handlePressRecordStop" @mouseleave.prevent="handlePressRecordCancel"
-            @touchstart.prevent="handlePressRecordStart" @touchend.prevent="handlePressRecordStop"
-            @touchcancel.prevent="handlePressRecordCancel">
-            <span class="kefu-tool-icon" v-if="!isRecording">
-              <Mic :size="18" />
-            </span>
-            <span class="kefu-tool-icon kefu-recording-pulse" v-else>
-              <MicOff :size="18" />
-            </span>
-            <span>{{ isRecording ? t('action.send', '发送') : t('pageInbox.action.record', '录音') }}</span>
-          </button>
-          <button type="button" class="kefu-tool-btn" :disabled="disabled" :title="t('pageInbox.action.emoji', '表情')"
-            :aria-label="t('pageInbox.action.emoji', '表情')" @click="toggleEmojiPicker">
-            <span class="kefu-tool-icon">
-              <SmilePlus :size="18" />
-            </span>
-            <span>{{ t('pageInbox.action.emoji', '表情') }}</span>
-          </button>
-        </div>
-      </template>
-    </t-chat-sender>
+    <div class="kefu-sender-host" @paste.capture="handleSenderPaste">
+      <t-chat-sender v-model="inputValue" :placeholder="inputPlaceholder || t('input.placeholder', '输入消息...')"
+        :disabled="disabled" :loading="isRecording" :send-btn-disabled="disabled" @send="handleSend">
+        <template #footer-prefix>
+          <div class="kefu-input-toolbar">
+            <button type="button" class="kefu-tool-btn" :disabled="disabled" :title="t('message.image', '图片')"
+              :aria-label="t('message.image', '图片')" @click="pickImageFiles">
+              <span class="kefu-tool-icon">
+                <ImageIcon :size="18" />
+              </span>
+              <span>{{ t('message.image', '图片') }}</span>
+            </button>
+            <button type="button" class="kefu-tool-btn" :disabled="disabled" :title="t('message.file', '文件')"
+              :aria-label="t('message.file', '文件')" @click="pickAnyFiles">
+              <span class="kefu-tool-icon">
+                <FileText :size="18" />
+              </span>
+              <span>{{ t('message.file', '文件') }}</span>
+            </button>
+            <button type="button" class="kefu-tool-btn" :disabled="disabled || !isVoiceSupported"
+              :class="{ active: isRecording }"
+              :title="isVoiceSupported ? t('voice.holdToRecord', '按住录音，松开发送，移出取消') : t('voice.notSupported', '此浏览器不支持录音')"
+              :aria-label="t('pageInbox.action.record', '录音')" @mousedown.prevent="handlePressRecordStart"
+              @mouseup.prevent="handlePressRecordStop" @mouseleave.prevent="handlePressRecordCancel"
+              @touchstart.prevent="handlePressRecordStart" @touchend.prevent="handlePressRecordStop"
+              @touchcancel.prevent="handlePressRecordCancel">
+              <span class="kefu-tool-icon" v-if="!isRecording">
+                <Mic :size="18" />
+              </span>
+              <span class="kefu-tool-icon kefu-recording-pulse" v-else>
+                <MicOff :size="18" />
+              </span>
+              <span>{{ isRecording ? t('action.send', '发送') : t('pageInbox.action.record', '录音') }}</span>
+            </button>
+            <button type="button" class="kefu-tool-btn" :disabled="disabled" :title="t('pageInbox.action.emoji', '表情')"
+              :aria-label="t('pageInbox.action.emoji', '表情')" @click="toggleEmojiPicker">
+              <span class="kefu-tool-icon">
+                <SmilePlus :size="18" />
+              </span>
+              <span>{{ t('pageInbox.action.emoji', '表情') }}</span>
+            </button>
+          </div>
+        </template>
+      </t-chat-sender>
+    </div>
 
     <div v-if="showEmojiPicker" class="kefu-emoji-mask" @click.self="toggleEmojiPicker">
       <div class="kefu-emoji-dialog" @click.stop>
@@ -1501,6 +1503,82 @@ function handleSend(value) {
     inputValue.value = "";
   }
   sendText(normalizeSendEventValue(value));
+}
+
+function inferFileExtension(mimeType) {
+  const normalized = String(mimeType || "").trim().toLowerCase();
+  if (!normalized) {
+    return "bin";
+  }
+  const direct = normalized.split("/")[1] || "";
+  if (direct.includes("png")) return "png";
+  if (direct.includes("jpeg") || direct.includes("jpg")) return "jpg";
+  if (direct.includes("gif")) return "gif";
+  if (direct.includes("webp")) return "webp";
+  if (direct.includes("bmp")) return "bmp";
+  if (direct.includes("svg")) return "svg";
+  if (direct.includes("pdf")) return "pdf";
+  if (direct.includes("plain")) return "txt";
+  if (direct.includes("json")) return "json";
+  if (direct.includes("zip")) return "zip";
+  if (direct.includes("mpeg")) return "mp3";
+  if (direct.includes("ogg")) return "ogg";
+  if (direct.includes("wav")) return "wav";
+  if (direct.includes("webm")) return "webm";
+  if (direct.includes("mp4")) return "mp4";
+  return direct.replace(/[^a-z0-9]+/g, "") || "bin";
+}
+
+function ensureClipboardFileName(file) {
+  if (!file) {
+    return null;
+  }
+  if (String(file.name || "").trim()) {
+    return file;
+  }
+  const isImage = String(file.type || "").startsWith("image/");
+  const isAudio = String(file.type || "").startsWith("audio/");
+  const extension = inferFileExtension(file.type);
+  const prefix = isImage ? "pasted_image" : isAudio ? "pasted_audio" : "pasted_file";
+  return new window.File([file], `${prefix}_${Date.now()}.${extension}`, {
+    type: file.type || "application/octet-stream",
+    lastModified: Date.now(),
+  });
+}
+
+function extractClipboardFiles(event) {
+  const clipboardData = event?.clipboardData;
+  if (!clipboardData) {
+    return [];
+  }
+  const result = [];
+  const items = Array.from(clipboardData.items || []);
+  for (const item of items) {
+    if (item?.kind !== "file") {
+      continue;
+    }
+    const file = ensureClipboardFileName(item.getAsFile());
+    if (file) {
+      result.push(file);
+    }
+  }
+  if (result.length > 0) {
+    return result;
+  }
+  return Array.from(clipboardData.files || []).map(ensureClipboardFileName).filter(Boolean);
+}
+
+function handleSenderPaste(event) {
+  if (props.disabled) {
+    return;
+  }
+  const files = extractClipboardFiles(event);
+  if (files.length === 0) {
+    return;
+  }
+  event.preventDefault();
+  showEmojiPicker.value = false;
+  void handleFileUpload(files);
 }
 
 function pickImageFiles() {
