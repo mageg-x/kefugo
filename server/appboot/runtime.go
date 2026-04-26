@@ -61,7 +61,6 @@ func InitRuntime(opts Options) (*gin.Engine, *config.Config, error) {
 		&models.KnowledgeQAFeedback{},
 		&models.KnowledgeVectorCollection{},
 		&models.KnowledgeVectorEntry{},
-		&models.KnowledgeArticle{},
 		&models.FAQItem{},
 		&models.QuickReply{},
 		&models.AuditLog{},

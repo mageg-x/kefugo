@@ -114,9 +114,6 @@ func (ac *AppController) hardDeleteAppRelatedRows(appID string) error {
 	if err := tx.Unscoped().Where("app_id = ?", appID).Delete(&models.FAQItem{}).Error; err != nil {
 		return rollback(err)
 	}
-	if err := tx.Unscoped().Where("app_id = ?", appID).Delete(&models.KnowledgeArticle{}).Error; err != nil {
-		return rollback(err)
-	}
 	if err := tx.Unscoped().Where("app_id = ?", appID).Delete(&models.KnowledgeChunk{}).Error; err != nil {
 		return rollback(err)
 	}
