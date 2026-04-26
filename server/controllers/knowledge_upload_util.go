@@ -4,11 +4,21 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
 	"kefu-server/config"
 )
+
+var knowledgeStripHTMLRegex = regexp.MustCompile(`<[^>]+>`)
+
+func stripKnowledgeHTML(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return ""
+	}
+	return strings.TrimSpace(knowledgeStripHTMLRegex.ReplaceAllString(s, " "))
+}
 
 func extractKnowledgeContentFromURL(fileURL string, name string) (content string, sourceType string, sourceName string, err error) {
 	cfg := config.GetConfig()
@@ -47,7 +57,7 @@ func extractKnowledgeContentFromURL(fileURL string, name string) (content string
 			return "", "", "", fmt.Errorf("file encoding is not utf-8")
 		}
 		if ext == ".html" || ext == ".htm" {
-			t = stripHTML(t)
+			t = stripKnowledgeHTML(t)
 		}
 		content = strings.TrimSpace(t)
 	default:

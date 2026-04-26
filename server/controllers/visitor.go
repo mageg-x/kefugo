@@ -53,6 +53,9 @@ type VisitorConn struct {
 var (
 	visitorConns = make(map[string]*VisitorConn) // 会话ID到连接的映射表
 	visitorMu    sync.RWMutex                    // 读写锁，保护visitorConns的并发访问
+
+	aiBotReplyInflight   = make(map[string]struct{})
+	aiBotReplyInflightMu sync.Mutex
 )
 
 // PushTypingToVisitor 向访客推送"客服正在输入"事件
@@ -458,7 +461,7 @@ func (vc *VisitorController) AIBotTest(c *gin.Context) {
 	cfg := getSystemSettingsCached()
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
 	defer cancel()
-	answer := strings.TrimSpace(vc.generateAIBotAnswer(ctx, &models.Session{SID: models.GetSessionID("ai_test", appID, 0)}, query, cfg, ""))
+	answer := strings.TrimSpace(vc.generateAIBotAnswer(ctx, &models.Session{SID: models.GetSessionID("ai_test", appID, 0)}, query, cfg, "", nil))
 	if answer == "" {
 		answer = "未生成有效答案，请检查知识库或模型配置。"
 	}
@@ -1028,7 +1031,7 @@ func (vc *VisitorController) handleMessage(sessionID, msgType string, payloadByt
 
 	// SDK 访客自动问答：访客发送文本后自动触发机器人回复。
 	if shouldTriggerAIBot {
-		go vc.dispatchAIBotReply(session.SID, payload.Content, cfg)
+		go vc.dispatchAIBotReply(session.SID, msg.MsgID, payload.Content, now, cfg)
 	}
 }
 
@@ -1051,12 +1054,71 @@ func (vc *VisitorController) shouldTriggerAIBotReply(session *models.Session, pa
 	return strings.TrimSpace(payload.Content) != ""
 }
 
-func (vc *VisitorController) dispatchAIBotReply(sessionID, question string, cfg systemSettings) {
+func beginAIBotReplyInflight(key string) bool {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return false
+	}
+	aiBotReplyInflightMu.Lock()
+	defer aiBotReplyInflightMu.Unlock()
+	if _, exists := aiBotReplyInflight[key]; exists {
+		return false
+	}
+	aiBotReplyInflight[key] = struct{}{}
+	return true
+}
+
+func endAIBotReplyInflight(key string) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return
+	}
+	aiBotReplyInflightMu.Lock()
+	delete(aiBotReplyInflight, key)
+	aiBotReplyInflightMu.Unlock()
+}
+
+func buildAIBotReplyInflightKey(sessionID, triggerMsgID, question string, triggerTs int64) string {
 	sessionID = strings.TrimSpace(sessionID)
+	triggerMsgID = strings.TrimSpace(triggerMsgID)
+	question = strings.TrimSpace(question)
+	if triggerMsgID != "" {
+		return sessionID + "|" + triggerMsgID
+	}
+	return sessionID + "|" + strconv.FormatInt(triggerTs, 10) + "|" + question
+}
+
+func (vc *VisitorController) canContinueAIBotReply(session *models.Session, triggerTs int64, cfg systemSettings) bool {
+	if session == nil || session.Closed {
+		return false
+	}
+	if !cfg.AIBotWhenAssigned && strings.TrimSpace(session.CurAgentID) != "" {
+		return false
+	}
+	// 会话里已经出现更新的访客消息，当前这次生成已过时，避免旧答案覆盖新问题。
+	if triggerTs > 0 && session.LastVisitorMsgTime > triggerTs {
+		return false
+	}
+	// 若客服或机器人已经对这条消息之后做过回复，也不再发送陈旧答案。
+	if triggerTs > 0 && session.LastAgentReplyTime > triggerTs {
+		return false
+	}
+	return true
+}
+
+func (vc *VisitorController) dispatchAIBotReply(sessionID, triggerMsgID, question string, triggerTs int64, cfg systemSettings) {
+	sessionID = strings.TrimSpace(sessionID)
+	triggerMsgID = strings.TrimSpace(triggerMsgID)
 	question = strings.TrimSpace(question)
 	if sessionID == "" || question == "" {
 		return
 	}
+	inflightKey := buildAIBotReplyInflightKey(sessionID, triggerMsgID, question, triggerTs)
+	if !beginAIBotReplyInflight(inflightKey) {
+		logger.Warnf("ai bot dispatch skipped duplicated inflight sid=%s trigger_msg_id=%s", sessionID, triggerMsgID)
+		return
+	}
+	defer endAIBotReplyInflight(inflightKey)
 
 	ss := service.GetSessionService()
 	ms := service.GetMsgService()
@@ -1070,10 +1132,7 @@ func (vc *VisitorController) dispatchAIBotReply(sessionID, question string, cfg 
 		logger.Errorf("ai bot dispatch session not found sid=%s err=%v", sessionID, err)
 		return
 	}
-	if session.Closed {
-		return
-	}
-	if !cfg.AIBotWhenAssigned && strings.TrimSpace(session.CurAgentID) != "" {
+	if !vc.canContinueAIBotReply(session, triggerTs, cfg) {
 		return
 	}
 
@@ -1083,11 +1142,36 @@ func (vc *VisitorController) dispatchAIBotReply(sessionID, question string, cfg 
 	// 先推送 typing，提升交互反馈。
 	PushTypingToVisitor(session.VisitorID(), session.SID)
 	streamKey := fmt.Sprintf("ai:%s:%d", session.SID, time.Now().UnixNano())
-	answer := vc.generateAIBotAnswer(ctx, session, question, cfg, streamKey)
+	answer := vc.generateAIBotAnswer(ctx, session, question, cfg, streamKey, func() bool {
+		latest, latestErr := ss.GetSession(sessionID)
+		if latestErr != nil || latest == nil {
+			cancel()
+			return false
+		}
+		if !vc.canContinueAIBotReply(latest, triggerTs, cfg) {
+			cancel()
+			return false
+		}
+		session = latest
+		return true
+	})
+	if ctx.Err() != nil && strings.TrimSpace(answer) == "" {
+		return
+	}
 	answer = strings.TrimSpace(answer)
 	if answer == "" {
 		answer = "已收到您的问题，我先帮您记录并转交人工客服继续跟进。"
 	}
+
+	latest, err := ss.GetSession(sessionID)
+	if err != nil || latest == nil {
+		logger.Errorf("ai bot reload session failed sid=%s err=%v", sessionID, err)
+		return
+	}
+	if !vc.canContinueAIBotReply(latest, triggerTs, cfg) {
+		return
+	}
+	session = latest
 
 	now := time.Now().Unix()
 	botName := strings.TrimSpace(cfg.AIBotName)
@@ -1169,7 +1253,7 @@ func (vc *VisitorController) pushAIBotStreamDelta(session *models.Session, botNa
 	}
 }
 
-func (vc *VisitorController) generateAIBotAnswer(ctx context.Context, session *models.Session, question string, cfg systemSettings, streamKey string) string {
+func (vc *VisitorController) generateAIBotAnswer(ctx context.Context, session *models.Session, question string, cfg systemSettings, streamKey string, canStream func() bool) string {
 	if session == nil {
 		return ""
 	}
@@ -1209,6 +1293,9 @@ func (vc *VisitorController) generateAIBotAnswer(ctx context.Context, session *m
 					if strings.TrimSpace(streamKey) == "" {
 						return
 					}
+					if canStream != nil && !canStream() {
+						return
+					}
 					vc.pushAIBotStreamDelta(session, botName, streamKey, current, false)
 					if time.Since(lastTypingPush) > 1500*time.Millisecond {
 						PushTypingToVisitor(session.VisitorID(), session.SID)
@@ -1221,6 +1308,9 @@ func (vc *VisitorController) generateAIBotAnswer(ctx context.Context, session *m
 		}
 		if out, _, inferErr := service.AnswerWithEnabledAPIModelStreamWithSystemPrompt(ctx, question, hits, systemPrompt, func(current string) {
 			if strings.TrimSpace(streamKey) == "" {
+				return
+			}
+			if canStream != nil && !canStream() {
 				return
 			}
 			vc.pushAIBotStreamDelta(session, botName, streamKey, current, false)

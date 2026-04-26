@@ -52,6 +52,12 @@
   margin-left: -24px !important;
 }
 
+.el-drawer__header {
+  margin-bottom: 0px !important;
+}
+.el-dialog__header{
+  padding: 0px !important;
+}
 
 /* 统一的字体大小方案 */
 .text-page-title {
