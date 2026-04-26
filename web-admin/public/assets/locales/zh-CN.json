@@ -407,7 +407,9 @@
       "deleteBase": "删除知识库",
       "uploadDocs": "上传文档",
       "retrieve": "检索",
-      "newConfig": "新增配置"
+      "newConfig": "新增配置",
+      "setDefault": "设为默认",
+      "rebuild": "重建索引"
     },
     "label": {
       "currentBase": "当前知识库"
@@ -434,7 +436,8 @@
       "baseDescription": "简要描述用途",
       "keepApiKey": "留空则保持不变",
       "defaultBaseURL": "留空使用默认地址",
-      "modelName": "如 gpt-4o-mini"
+      "modelName": "如 gpt-4o-mini",
+      "configName": "如：生产环境-ChatGPT"
     },
     "word": {
       "error": "错误",
@@ -472,7 +475,15 @@
       "apiKey": "API 密钥",
       "timeoutSec": "超时(秒)",
       "temperature": "温度",
-      "maxTokens": "最大 tokens"
+      "maxTokens": "最大 tokens",
+      "modelType": "模型类型",
+      "configName": "配置名称",
+      "default": "默认"
+    },
+    "modelType": {
+      "chat": "聊天模型",
+      "embedding": "向量化模型",
+      "rerank": "重排模型"
     },
     "docStatus": {
       "indexed": "已索引",
@@ -530,13 +541,23 @@
       "feedbackFailed": "反馈保存失败",
       "loadModelListFailed": "加载模型列表失败",
       "loadModelDetailFailed": "加载模型详情失败",
-      "modelRequiredFields": "请填写提供商、API 密钥和模型名称",
+      "modelRequiredFields": "请填写必填字段（提供商、模型名称，非Ollama需API密钥）",
       "modelUpdated": "模型配置已更新",
       "modelCreated": "模型配置已创建",
       "saveModelFailed": "保存模型配置失败",
       "connectSuccess": "连接成功",
       "connectFailed": "连接测试失败",
-      "modelDeleted": "模型配置已删除"
+      "modelDeleted": "模型配置已删除",
+      "setDefaultSuccess": "已设为默认模型",
+      "setDefaultFailed": "设置默认模型失败",
+      "rebuildStarted": "索引重建已启动",
+      "rebuildFailed": "启动索引重建失败"
+    },
+    "confirm": {
+      "rebuild": "切换嵌入模型后需要重建向量索引，确认开始重建？"
+    },
+    "rebuild": {
+      "title": "索引重建进度"
     }
   },
   "pageMore": {
@@ -748,7 +769,7 @@
       "loadMoreHistory": "加载更多历史消息",
       "quickReply": "快捷回复",
       "aiSuggest": "AI建议",
-      "record": "录音",
+      "record": "语音",
       "emoji": "表情",
       "pickEmoji": "选择表情",
       "reply": "回复",

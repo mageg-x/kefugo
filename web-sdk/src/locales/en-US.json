@@ -407,7 +407,9 @@
       "deleteBase": "Delete Knowledge Base",
       "uploadDocs": "Upload Documents",
       "retrieve": "Retrieve",
-      "newConfig": "New Config"
+      "newConfig": "New Config",
+      "setDefault": "Set Default",
+      "rebuild": "Rebuild Index"
     },
     "label": {
       "currentBase": "Current Knowledge Base"
@@ -434,7 +436,8 @@
       "baseDescription": "Brief description",
       "keepApiKey": "Leave empty to keep unchanged",
       "defaultBaseURL": "Use default when empty",
-      "modelName": "e.g. gpt-4o-mini"
+      "modelName": "e.g. gpt-4o-mini",
+      "configName": "e.g. Production-ChatGPT"
     },
     "word": {
       "error": "Error",
@@ -472,7 +475,15 @@
       "apiKey": "API Key",
       "timeoutSec": "Timeout(s)",
       "temperature": "Temperature",
-      "maxTokens": "Max tokens"
+      "maxTokens": "Max tokens",
+      "modelType": "Model Type",
+      "configName": "Config Name",
+      "default": "Default"
+    },
+    "modelType": {
+      "chat": "Chat Model",
+      "embedding": "Embedding Model",
+      "rerank": "Rerank Model"
     },
     "docStatus": {
       "indexed": "Indexed",
@@ -490,7 +501,8 @@
       "deleteBaseSuffix": "Its documents and chunks will also be removed.",
       "deleteDocument": "Delete document",
       "deleteChunk": "Delete this chunk?",
-      "deleteModel": "Delete model config"
+      "deleteModel": "Delete model config",
+      "rebuild": "Changing the embedding model requires rebuilding the vector index. Start rebuild?"
     },
     "toast": {
       "loadBaseFailed": "Failed to load knowledge bases",
@@ -530,13 +542,20 @@
       "feedbackFailed": "Failed to save feedback",
       "loadModelListFailed": "Failed to load model list",
       "loadModelDetailFailed": "Failed to load model details",
-      "modelRequiredFields": "Provider, API key, and model name are required",
+      "modelRequiredFields": "Required fields: provider, model name (API key required for non-Ollama)",
       "modelUpdated": "Model config updated",
       "modelCreated": "Model config created",
       "saveModelFailed": "Failed to save model config",
       "connectSuccess": "Connection successful",
       "connectFailed": "Connection test failed",
-      "modelDeleted": "Model config deleted"
+      "modelDeleted": "Model config deleted",
+      "setDefaultSuccess": "Set as default model",
+      "setDefaultFailed": "Failed to set default model",
+      "rebuildStarted": "Index rebuild started",
+      "rebuildFailed": "Failed to start index rebuild"
+    },
+    "rebuild": {
+      "title": "Index Rebuild Progress"
     }
   },
   "pageMore": {
@@ -748,7 +767,7 @@
       "loadMoreHistory": "Load More History",
       "quickReply": "Quick Reply",
       "aiSuggest": "AI Suggest",
-      "record": "Record",
+      "record": "Audio",
       "emoji": "Emoji",
       "pickEmoji": "Pick Emoji",
       "reply": "Reply",

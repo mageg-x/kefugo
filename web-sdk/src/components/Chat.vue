@@ -11,7 +11,7 @@
     </header>
 
     <main class="kefu-chat-main">
-      <LiaoChatCore
+      <TdChatCore
         :app-id="appId"
         :user-id="userId"
         :api-base-url="apiBaseUrl"
@@ -26,7 +26,7 @@
 
 <script setup>
 import { computed, ref } from "vue";
-import LiaoChatCore from "./LiaoChatCore.vue";
+import TdChatCore from "./TdChatCore.vue";
 import { getChatInitOptionsFromQuery } from "../script/chat-runtime.js";
 
 const initOptions = getChatInitOptionsFromQuery("default");

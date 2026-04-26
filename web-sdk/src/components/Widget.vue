@@ -37,7 +37,7 @@
       </header>
 
       <div class="kefu-widget-body">
-        <LiaoChatCore
+        <TdChatCore
           :key="chatInstanceKey"
           :app-id="appId"
           :api-base-url="apiBaseUrl"
@@ -65,7 +65,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import LiaoChatCore from "./LiaoChatCore.vue";
+import TdChatCore from "./TdChatCore.vue";
 
 const props = defineProps({
   appId: { type: String, default: "default" },

@@ -4,7 +4,8 @@
       <div class="inbox-side-head">
         <div>
           <h2>{{ t("pageInbox.title") }}</h2>
-          <p>{{ t("pageInbox.status.assigned") }} {{ activeCount }} · {{ t("pageInbox.status.unassigned") }} {{ unassignedCount }}</p>
+          <p>{{ t("pageInbox.status.assigned") }} {{ activeCount }} · {{ t("pageInbox.status.unassigned") }} {{
+            unassignedCount }}</p>
         </div>
         <el-button size="small" @click="reloadSessions">{{ t("action.refresh") }}</el-button>
       </div>
@@ -36,33 +37,17 @@
           </el-select>
         </div>
         <div class="inbox-filter-row">
-          <el-date-picker
-            v-model="startTime"
-            size="small"
-            type="datetime"
-            :placeholder="t('pageInbox.filter.startTime')"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            @change="reloadSessions"
-          />
-          <el-date-picker
-            v-model="endTime"
-            size="small"
-            type="datetime"
-            :placeholder="t('pageInbox.filter.endTime')"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            @change="reloadSessions"
-          />
+          <el-date-picker v-model="startTime" size="small" type="datetime"
+            :placeholder="t('pageInbox.filter.startTime')" value-format="YYYY-MM-DD HH:mm:ss"
+            @change="reloadSessions" />
+          <el-date-picker v-model="endTime" size="small" type="datetime" :placeholder="t('pageInbox.filter.endTime')"
+            value-format="YYYY-MM-DD HH:mm:ss" @change="reloadSessions" />
         </div>
       </div>
 
       <div class="session-list" v-loading="sessionLoading">
-        <button
-          v-for="session in sessions"
-          :key="session.sid"
-          class="session-row"
-          :class="{ active: selectedSession?.sid === session.sid }"
-          @click="selectSession(session)"
-        >
+        <button v-for="session in sessions" :key="session.sid" class="session-row"
+          :class="{ active: selectedSession?.sid === session.sid }" @click="selectSession(session)">
           <div class="session-main">
             <p class="visitor">{{ session.visitor_id }}</p>
             <p class="last-msg">{{ session.last_message || t('pageInbox.empty.noMessage') }}</p>
@@ -84,7 +69,8 @@
               <strong>{{ selectedSession.visitor_id }}</strong>
               <small>{{ selectedSession.sid }}</small>
               <small class="visitor-profile">
-                {{ selectedSession.last_client_ip || "-" }} · {{ selectedSession.last_device || "-" }} · {{ selectedSession.last_geo || "-" }}
+                {{ selectedSession.last_client_ip || "-" }} · {{ selectedSession.last_device || "-" }} · {{
+                  selectedSession.last_geo || "-" }}
               </small>
             </span>
           </button>
@@ -108,114 +94,123 @@
           <button v-if="hasMoreHistory" class="load-more" @click="loadMoreMessages" :disabled="historyLoading">
             {{ historyLoading ? t("pageInbox.loading") : t("pageInbox.action.loadMoreHistory") }}
           </button>
-          <div v-for="msg in messages" :key="msg.msg_id || msg.local_id" class="msg-row" :class="{ self: msg.isSelf }">
-            <div class="msg-head" :class="{ self: msg.isSelf }">
-              <img class="msg-avatar" :src="messageAvatar(msg)" :alt="messageDisplayName(msg)" />
-              <p v-if="!msg.isSelf" class="msg-name">{{ messageDisplayName(msg) }}</p>
-            </div>
-            <div class="msg-main">
-              <div class="msg-bubble">
-                <div v-if="msg.replyTo" class="msg-reply-quote" :class="{ self: msg.isSelf }">
-                  <p class="msg-reply-quote-head">{{ msg.replyTo.sender || t("pageInbox.word.quotedMessage") }}</p>
-                  <p class="msg-reply-quote-preview">{{ replyPreviewText(msg.replyTo) }}</p>
-                </div>
-                <template v-if="msg.content_type === 'image'">
-                  <img class="msg-image" :src="msg.url || msg.content" alt="image" @click="previewImage(msg.url || msg.content)" />
-                </template>
-                <template v-else-if="msg.content_type === 'audio'">
-                  <div class="msg-audio-pill" :class="{ self: msg.isSelf }">
+          <template v-for="msg in messages" :key="msg.msg_id || msg.local_id">
+            <t-chat-message v-if="msg.content_type === 'system'" role="system"
+              :content="[{ type: 'text', data: typeof msg.content === 'string' ? msg.content : '' }]"
+              :datetime="formatTime(msg.timestamp)" variant="outline" />
+            <t-chat-message v-else :role="msg.isSelf ? 'user' : 'assistant'" :avatar="messageAvatar(msg)"
+              :name="messageDisplayName(msg)" :datetime="formatTime(msg.timestamp)"
+              :variant="msg.isSelf ? 'base' : 'outline'" :status="toTDesignStatus(msg.status)"
+              :content="CUSTOM_MESSAGE_SEGMENTS" :allow-content-segment-custom="true">
+              <template #content>
+                <div class="msg-rich-content" :class="{ self: msg.isSelf }">
+                  <div v-if="msg.replyTo" class="msg-reply-quote" :class="{ self: msg.isSelf }">
+                    <p class="msg-reply-quote-head">{{ msg.replyTo.sender || t("pageInbox.word.quotedMessage") }}</p>
+                    <p class="msg-reply-quote-preview">{{ replyPreviewText(msg.replyTo) }}</p>
+                  </div>
+
+                  <div v-if="msg.content_type === BUSINESS_CONTENT_TYPES.TEXT" class="msg-bubble"
+                    :class="{ self: msg.isSelf }">
+                    <div class="msg-markdown-content" v-html="renderMarkdownContent(msg.content)"></div>
+                  </div>
+
+                  <button v-else-if="msg.content_type === BUSINESS_CONTENT_TYPES.IMAGE" type="button"
+                    class="msg-image-wrap" :class="{ self: msg.isSelf }"
+                    @click="previewImage(msg.url || msg.content)">
+                    <img class="msg-image" :src="msg.url || msg.content" alt="image" />
+                  </button>
+
+                  <div v-else-if="msg.content_type === BUSINESS_CONTENT_TYPES.AUDIO" class="msg-audio-pill"
+                    :class="{ self: msg.isSelf }">
                     <AudioLines :size="16" class="msg-audio-symbol" />
-                    <button
-                      type="button"
-                      class="msg-audio-icon-btn"
+                    <button type="button" class="msg-audio-icon-btn"
                       :title="playingAudioId === (msg.msg_id || msg.local_id) ? 'pause' : 'play'"
                       :aria-label="playingAudioId === (msg.msg_id || msg.local_id) ? 'pause' : 'play'"
-                      @click="toggleAudio(msg)"
-                    >
+                      @click="toggleAudio(msg)">
                       <CirclePause v-if="playingAudioId === (msg.msg_id || msg.local_id)" :size="18" />
                       <CirclePlay v-else :size="18" />
                     </button>
-                    <button
-                      type="button"
-                      class="msg-audio-icon-btn"
-                      title="stop"
-                      aria-label="stop"
-                      :disabled="playingAudioId !== (msg.msg_id || msg.local_id)"
-                      @click="stopAudio(msg)"
-                    >
+                    <button type="button" class="msg-audio-icon-btn" title="stop" aria-label="stop"
+                      :disabled="playingAudioId !== (msg.msg_id || msg.local_id)" @click="stopAudio(msg)">
                       <CircleStop :size="18" />
                     </button>
                     <span class="msg-audio-duration">{{ formatDuration(msg.duration) }}</span>
+                    <audio class="msg-hidden-audio" :ref="(el) => bindAudio(msg, el)" :src="msg.url || msg.content"
+                      @ended="onAudioEnded(msg)"></audio>
                   </div>
-                  <audio :ref="(el) => bindAudio(msg, el)" :src="msg.url || msg.content" @ended="onAudioEnded(msg)"></audio>
-                </template>
-                <template v-else-if="msg.content_type === 'file'">
-                  <a class="file-link" :href="msg.url || msg.content" target="_blank" rel="noreferrer">
-                    {{ msg.name || t("message.file") }} ({{ formatBytes(msg.size) }})
-                  </a>
-                </template>
-                <template v-else>
-                  <div class="msg-content markdown-content" v-html="renderMessageContent(msg.content)"></div>
-                </template>
-              </div>
-              <div class="msg-meta-line" :class="{ self: msg.isSelf }">
-                <template v-if="msg.isSelf">
-                  <span class="msg-time">{{ formatTime(msg.timestamp) }}</span>
-                  <span class="msg-dot">·</span>
-                  <span class="msg-status">{{ toMessageStatusText(msg.status) }}</span>
-                  <button v-if="msg.status === 'failed'" class="retry-btn" @click="retryMessage(msg)">{{ t("action.retry") }}</button>
-                </template>
-                <template v-else>
-                  <span class="msg-time">{{ formatTime(msg.timestamp) }}</span>
-                </template>
-                <button type="button" class="msg-reply-btn" title="reply" aria-label="reply" @click="startReply(msg)">
-                  <MessageCircleReply :size="14" />
-                </button>
-              </div>
-            </div>
-          </div>
+
+                  <div v-else-if="msg.content_type === BUSINESS_CONTENT_TYPES.FILE" class="kefu-file-bubble">
+                    <div class="kefu-file-info">
+                      <span class="kefu-file-icon" :style="{ color: getFileIconColor(msg) }">
+                        <component :is="getFileIconComponent(msg)" :size="28" />
+                      </span>
+                      <div class="kefu-file-detail">
+                        <span class="kefu-file-name">{{ msg.name || msg.content || t('message.file') }}</span>
+                        <span v-if="msg.size" class="kefu-file-size">{{ formatFileSize(msg.size) }}</span>
+                      </div>
+                    </div>
+                    <a v-if="msg.url || msg.content" class="kefu-file-download" :href="msg.url || msg.content"
+                      target="_blank" rel="noopener noreferrer" :title="t('action.download')"
+                      :aria-label="t('action.download')">
+                      <Download :size="18" />
+                    </a>
+                  </div>
+
+                  <div v-else class="msg-bubble" :class="{ self: msg.isSelf }">
+                    <div class="msg-markdown-content" v-html="renderMarkdownContent(msg.content)"></div>
+                  </div>
+                </div>
+              </template>
+              <template #actionbar>
+                <div class="kefu-custom-actionbar">
+                  <button type="button" class="kefu-action-btn" :title="t('action.copy', '复制')"
+                    :aria-label="t('action.copy', '复制')" @click="handleChatAction('copy', msg)">
+                    <Copy :size="14" />
+                  </button>
+                  <template v-if="!msg.isSelf">
+                    <button type="button" class="kefu-action-btn" :class="{ active: msg._isGood }"
+                      :title="t('action.like', '点赞')" :aria-label="t('action.like', '点赞')"
+                      @click="handleChatAction('good', msg)">
+                      <ThumbsUp :size="14" />
+                    </button>
+                    <button type="button" class="kefu-action-btn" :class="{ active: msg._isBad }"
+                      :title="t('action.dislike', '点踩')" :aria-label="t('action.dislike', '点踩')"
+                      @click="handleChatAction('bad', msg)">
+                      <ThumbsDown :size="14" />
+                    </button>
+                  </template>
+                  <button type="button" class="kefu-action-btn" :title="t('action.reply', '引用回复')"
+                    :aria-label="t('action.reply', '引用回复')" @click="handleChatAction('replay', msg)">
+                    <Reply :size="14" />
+                  </button>
+                </div>
+              </template>
+              <template #actions>
+                <div class="msg-meta-line" :class="{ self: msg.isSelf }">
+                  <template v-if="msg.isSelf">
+                    <span class="msg-time">{{ formatTime(msg.timestamp) }}</span>
+                    <span class="msg-dot">·</span>
+                    <span v-if="msg.status === UI_MESSAGE_STATUS.FAILED" class="msg-status msg-status-failed">
+                      <AlertCircle :size="12" />
+                      {{ t("pageInbox.msgStatus.failed") }}
+                    </span>
+                    <span v-else class="msg-status">{{ toMessageStatusText(msg.status) }}</span>
+                    <button v-if="msg.status === UI_MESSAGE_STATUS.FAILED" class="retry-btn"
+                      @click.stop="retryMessage(msg)">{{
+                        t("action.retry") }}</button>
+                  </template>
+                  <template v-else>
+                    <span class="msg-time">{{ formatTime(msg.timestamp) }}</span>
+                  </template>
+                </div>
+              </template>
+            </t-chat-message>
+          </template>
         </section>
 
         <footer class="chat-input-wrap">
           <div v-if="isVisitorTyping" class="typing-tip">{{ t("pageInbox.tip.visitorTyping") }}</div>
           <div v-if="isSessionClosed" class="closed-tip">{{ t("pageInbox.tip.sessionClosedNoSend") }}</div>
-          <div class="toolbar">
-            <el-button size="small" @click="openSnippetDialog = true" class="toolbar-btn" :disabled="!canSend()">
-              <MessageSquare :size="16" />
-              <span>{{ t("pageInbox.action.quickReply") }}</span>
-            </el-button>
-            <el-button size="small" :loading="aiSuggestLoading" @click="applyAISuggest" :disabled="!canControlSession" class="toolbar-btn">
-              <Brain :size="16" />
-              <span class=" ml-2">{{ t("pageInbox.action.aiSuggest") }}</span>
-            </el-button>
-            <el-button size="small" @click="pickFile('image/*')" class="toolbar-btn" :disabled="!canSend()">
-              <ImagePlus :size="16" />
-              <span class=" ml-2">{{ t("message.image") }}</span>
-            </el-button>
-            <el-button size="small" @click="pickFile('*/*')" class="toolbar-btn" :disabled="!canSend()">
-              <FileText :size="16" />
-              <span class=" ml-2">{{ t("message.file") }}</span>
-            </el-button>
-            <el-button
-              size="small"
-              class="toolbar-btn"
-              :disabled="!canSend() || !isRecordSupported"
-              :class="{ 'is-recording': isRecording }"
-              @mousedown.prevent="handlePressRecordStart"
-              @mouseup.prevent="handlePressRecordStop"
-              @mouseleave.prevent="handlePressRecordCancel"
-              @touchstart.prevent="handlePressRecordStart"
-              @touchend.prevent="handlePressRecordStop"
-              @touchcancel.prevent="handlePressRecordCancel"
-            >
-              <Mic :size="16" />
-              <span class=" ml-2">{{ isRecording ? t("action.send") : t("pageInbox.action.record") }}</span>
-            </el-button>
-            <el-button size="small" @click="toggleEmojiPicker" class="toolbar-btn" :disabled="!canSend()">
-              <SmilePlus :size="16" />
-              <span class=" ml-2">{{ t("pageInbox.action.emoji") }}</span>
-            </el-button>
-          </div>
           <div v-if="showEmojiPicker" class="emoji-mask" @click.self="toggleEmojiPicker">
             <div class="emoji-dialog">
               <header class="emoji-dialog-head">
@@ -226,13 +221,8 @@
                 <section v-for="group in emojiGroups" :key="group.label" class="emoji-group">
                   <p class="emoji-group-title">{{ group.label }}</p>
                   <div class="emoji-grid">
-                    <button
-                      v-for="emoji in group.items"
-                      :key="group.label + emoji"
-                      type="button"
-                      class="emoji-btn"
-                      @click="appendEmoji(emoji)"
-                    >
+                    <button v-for="emoji in group.items" :key="group.label + emoji" type="button" class="emoji-btn"
+                      @click="appendEmoji(emoji)">
                       {{ emoji }}
                     </button>
                   </div>
@@ -247,46 +237,95 @@
             </div>
             <button type="button" class="reply-bar-cancel" @click="cancelReply">×</button>
           </div>
-          <textarea
-            v-model="inputMessage"
-            class="chat-input"
-            :placeholder="sendHintText"
-            :disabled="!canSend()"
-            @keydown="handleInputKeydown"
-            @keydown.ctrl.enter.exact.stop
-            @input="handleInputTyping"
-          />
+          <t-chat-sender v-model="inputMessage" :placeholder="sendHintText" :disabled="!canSend()"
+            :send-btn-disabled="!canSend()" @send="(val) => sendText(val)">
+            <template #footer-prefix>
+              <div class="kefu-input-toolbar">
+                <button type="button" class="kefu-tool-btn" :disabled="!canSend()"
+                  :title="t('pageInbox.action.quickReply')" :aria-label="t('pageInbox.action.quickReply')"
+                  @click="openSnippetDialog = true">
+                  <span class="kefu-tool-icon">
+                    <MessageSquare :size="16" />
+                  </span>
+                  <span>{{ t("pageInbox.action.quickReply") }}</span>
+                </button>
+                <button type="button" class="kefu-tool-btn" :disabled="!canSend() || aiSuggestLoading"
+                  :title="t('pageInbox.action.aiSuggest')" :aria-label="t('pageInbox.action.aiSuggest')"
+                  @click="applyAISuggest">
+                  <span class="kefu-tool-icon">
+                    <Brain :size="16" />
+                  </span>
+                  <span>{{ t("pageInbox.action.aiSuggest") }}</span>
+                </button>
+                <button type="button" class="kefu-tool-btn" :disabled="!canSend()" :title="t('message.image')"
+                  :aria-label="t('message.image')" @click="pickFile('image/*')">
+                  <span class="kefu-tool-icon">
+                    <ImagePlus :size="16" />
+                  </span>
+                  <span>{{ t("message.image") }}</span>
+                </button>
+                <button type="button" class="kefu-tool-btn" :disabled="!canSend()" :title="t('message.file')"
+                  :aria-label="t('message.file')" @click="pickFile('*/*')">
+                  <span class="kefu-tool-icon">
+                    <FileText :size="16" />
+                  </span>
+                  <span>{{ t("message.file") }}</span>
+                </button>
+                <button type="button" class="kefu-tool-btn" :disabled="!canSend() || !isRecordSupported"
+                  :class="{ active: isRecording }"
+                  :title="isRecordSupported ? t('voice.holdToRecord', '按住录音，松开发送，移出取消') : t('voice.notSupported', '此浏览器不支持录音')"
+                  :aria-label="t('pageInbox.action.record')" @mousedown.prevent="handlePressRecordStart"
+                  @mouseup.prevent="handlePressRecordStop" @mouseleave.prevent="handlePressRecordCancel"
+                  @touchstart.prevent="handlePressRecordStart" @touchend.prevent="handlePressRecordStop"
+                  @touchcancel.prevent="handlePressRecordCancel">
+                  <span class="kefu-tool-icon" v-if="!isRecording">
+                    <Mic :size="16" />
+                  </span>
+                  <span class="kefu-tool-icon kefu-recording-pulse" v-else>
+                    <MicOff :size="16" />
+                  </span>
+                  <span>{{ isRecording ? t("action.send") : t("pageInbox.action.record") }}</span>
+                </button>
+                <button type="button" class="kefu-tool-btn" :disabled="!canSend()" :title="t('pageInbox.action.emoji')"
+                  :aria-label="t('pageInbox.action.emoji')" @click="toggleEmojiPicker">
+                  <span class="kefu-tool-icon">
+                    <SmilePlus :size="16" />
+                  </span>
+                  <span>{{ t("pageInbox.action.emoji") }}</span>
+                </button>
+              </div>
+            </template>
+          </t-chat-sender>
           <div class="send-row">
             <span class="ws-status" :class="wsStatus">{{ wsStatusText }}</span>
-            <el-button type="primary" @click="sendText" :disabled="!canSend()">{{ t("action.send") }}</el-button>
           </div>
         </footer>
       </template>
 
       <div v-else class="empty-chat">
-        <el-icon :size="56"><ChatDotRound /></el-icon>
+        <el-icon :size="56">
+          <ChatDotRound />
+        </el-icon>
         <p>{{ t("pageInbox.empty.selectSession") }}</p>
       </div>
     </main>
 
     <el-dialog v-model="transferDialogVisible" :title="t('pageInbox.dialog.transfer')" width="420px">
-      <el-select v-model="transferTargetAgent" :placeholder="t('pageInbox.placeholder.selectTargetAgent')" style="width: 100%">
-        <el-option v-for="agent in transferAgents" :key="agent.username" :label="agent.username" :value="agent.username" />
+      <el-select v-model="transferTargetAgent" :placeholder="t('pageInbox.placeholder.selectTargetAgent')"
+        style="width: 100%">
+        <el-option v-for="agent in transferAgents" :key="agent.username" :label="agent.username"
+          :value="agent.username" />
       </el-select>
       <template #footer>
         <el-button @click="transferDialogVisible = false">{{ t("action.cancel") }}</el-button>
-        <el-button type="primary" :disabled="!transferTargetAgent" @click="confirmTransfer">{{ t("pageInbox.action.confirmTransfer") }}</el-button>
+        <el-button type="primary" :disabled="!transferTargetAgent" @click="confirmTransfer">{{
+          t("pageInbox.action.confirmTransfer") }}</el-button>
       </template>
     </el-dialog>
 
     <el-dialog v-model="openSnippetDialog" :title="t('pageInbox.dialog.quickReply')" width="680px">
       <div class="snippet-grid" v-loading="snippetLoading">
-        <button
-          v-for="snippet in snippets"
-          :key="snippet.id"
-          class="snippet-card"
-          @click="useSnippet(snippet)"
-        >
+        <button v-for="snippet in snippets" :key="snippet.id" class="snippet-card" @click="useSnippet(snippet)">
           <div class="snippet-head">
             <el-tag size="small">{{ snippet.category }}</el-tag>
             <span>{{ snippet.usage_count || 0 }}{{ t("pageInbox.word.times") }}</span>
@@ -294,11 +333,13 @@
           <h4>{{ snippet.title }}</h4>
           <p>{{ snippet.content }}</p>
         </button>
-        <div v-if="!snippetLoading && snippets.length === 0" class="snippet-empty">{{ t("pageInbox.empty.noSnippet") }}</div>
+        <div v-if="!snippetLoading && snippets.length === 0" class="snippet-empty">{{ t("pageInbox.empty.noSnippet") }}
+        </div>
       </div>
     </el-dialog>
 
-    <el-drawer v-model="visitorDrawerVisible" :title="t('pageInbox.dialog.visitorProfile')" direction="rtl" size="380px">
+    <el-drawer v-model="visitorDrawerVisible" :title="t('pageInbox.dialog.visitorProfile')" direction="rtl"
+      size="380px">
       <div class="visitor-drawer">
         <img class="visitor-drawer-avatar" :src="visitorAvatarUrl" alt="visitor" />
         <div class="visitor-drawer-id">{{ selectedSession?.visitor_id || "-" }}</div>
@@ -355,11 +396,37 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import DOMPurify from "dompurify";
 import { ElMessage } from "element-plus";
 import { ChatDotRound } from "@element-plus/icons-vue";
 import { marked } from "marked";
-import DOMPurify from "dompurify";
-import { ImagePlus, Mic, FileText, MessageSquare, Brain, SmilePlus, AudioLines, CirclePlay, CirclePause, CircleStop, MessageCircleReply } from "lucide-vue-next";
+import {
+  ImagePlus,
+  Mic,
+  MicOff,
+  AlertCircle,
+  FileText,
+  MessageSquare,
+  Brain,
+  SmilePlus,
+  AudioLines,
+  CirclePlay,
+  CirclePause,
+  CircleStop,
+  MessageCircleReply,
+  Download,
+  FileSpreadsheet,
+  FileImage,
+  FileCode,
+  Music,
+  Video,
+  FileArchive,
+  FileQuestion,
+  Copy,
+  ThumbsUp,
+  ThumbsDown,
+  Reply,
+} from "lucide-vue-next";
 import api from "@/script/api";
 import { AgentWSClient } from "@/script/ws-agent";
 import { useStore } from "@/script/store";
@@ -399,6 +466,11 @@ const filterPanelCollapsed = ref(true);
 const transferDialogVisible = ref(false);
 const transferAgents = ref([]);
 const transferTargetAgent = ref("");
+const CUSTOM_MESSAGE_SEGMENTS = Object.freeze([{ type: "custom", data: " " }]);
+const MARKDOWN_SANITIZE_OPTIONS = {
+  USE_PROFILES: { html: true },
+  ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|\/|#)/i,
+};
 const openSnippetDialog = ref(false);
 const snippetLoading = ref(false);
 const snippets = ref([]);
@@ -537,28 +609,6 @@ function normalizeMessageMediaFields(msg) {
   return normalized;
 }
 
-function escapeText(value) {
-  return String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function renderMessageContent(value) {
-  const text = String(value || "");
-  if (!text.trim()) {
-    return "";
-  }
-  const safe = escapeText(text);
-  const html = String(marked.parse(safe, { gfm: true, breaks: true }));
-  return DOMPurify.sanitize(html, {
-    USE_PROFILES: { html: true },
-    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|\/|#)/i,
-  });
-}
-
 function replyPreviewText(target) {
   if (!target) return "";
   const contentType = String(target.contentType || "").toLowerCase();
@@ -625,6 +675,12 @@ function toMessageStatusText(status) {
   return t("pageInbox.msgStatus.sent");
 }
 
+function toTDesignStatus(status) {
+  if (status === UI_MESSAGE_STATUS.SENDING) return "pending";
+  if (status === UI_MESSAGE_STATUS.FAILED) return "error";
+  return "complete";
+}
+
 function formatTime(ts) {
   if (!ts) return "--";
   const n = Number(ts);
@@ -632,6 +688,50 @@ function formatTime(ts) {
   const d = new Date(ms);
   if (Number.isNaN(d.getTime())) return "--";
   return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+}
+
+function escapeMarkdownText(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function renderMarkdownContent(value) {
+  const text = String(value || "");
+  if (!text.trim()) {
+    return "";
+  }
+  const safe = escapeMarkdownText(text);
+  const html = String(marked.parse(safe, { gfm: true, breaks: true }));
+  return DOMPurify.sanitize(html, MARKDOWN_SANITIZE_OPTIONS);
+}
+
+function normalizeSendEventValue(value) {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+  if (value && typeof value === "object") {
+    return String(value.value || "").trim();
+  }
+  return "";
+}
+
+function compareInboxMessages(a, b) {
+  const leftTs = Number(a?.timestamp || 0);
+  const rightTs = Number(b?.timestamp || 0);
+  if (leftTs !== rightTs) {
+    return leftTs - rightTs;
+  }
+  const leftId = String(a?.msg_id || a?.local_id || "");
+  const rightId = String(b?.msg_id || b?.local_id || "");
+  return leftId.localeCompare(rightId);
+}
+
+function sortInboxMessages(list = []) {
+  return [...list].sort(compareInboxMessages);
 }
 
 function formatDuration(sec) {
@@ -701,7 +801,7 @@ async function selectSession(session) {
   }
   await loadHistory();
   if (canControlSession.value) {
-    await api.readSession(session.sid).catch(() => {});
+    await api.readSession(session.sid).catch(() => { });
   }
 }
 
@@ -715,9 +815,9 @@ async function loadHistory(before = "") {
       before,
     });
     const rows = resp?.data?.data?.data || [];
-    const mapped = rows.map(toMessage).filter(Boolean);
+    const mapped = sortInboxMessages(rows.map(toMessage).filter(Boolean));
     if (before) {
-      messages.value = [...mapped, ...messages.value];
+      messages.value = sortInboxMessages([...mapped, ...messages.value]);
     } else {
       messages.value = mapped;
       nextTick(scrollToBottom);
@@ -743,7 +843,7 @@ function scrollToBottom() {
 }
 
 function appendMessage(msg) {
-  messages.value.push(msg);
+  messages.value = sortInboxMessages([...messages.value, msg]);
   nextTick(scrollToBottom);
 }
 
@@ -777,9 +877,9 @@ function canSend() {
   return canControlSession.value;
 }
 
-function sendText() {
-  const text = String(inputMessage.value || "").trim();
-  if (!text || !canSend()) return;
+function sendText(text) {
+  const content = normalizeSendEventValue(text) || String(inputMessage.value || "").trim();
+  if (!content || !canSend()) return;
 
   const localId = createLocalId("out");
   const clientId = createLocalId("cid");
@@ -787,7 +887,7 @@ function sendText() {
   appendMessage({
     ...buildInboxUiMessageFromOutgoing(
       BUSINESS_CONTENT_TYPES.TEXT,
-      { content: text, replyTo: currentReply },
+      { content, replyTo: currentReply },
       { sid: selectedSession.value.sid, localId }
     ),
     status: UI_MESSAGE_STATUS.SENDING,
@@ -798,7 +898,7 @@ function sendText() {
   const result = wsClient.value?.sendPayload(
     selectedSession.value.sid,
     BUSINESS_CONTENT_TYPES.TEXT,
-    { content: text, clientId, replyTo: currentReply }
+    { content, clientId, replyTo: currentReply }
   );
   replyTo.value = null;
   const ok = Boolean(result?.ok);
@@ -1103,7 +1203,7 @@ async function readAudioDurationFromURL(url) {
 }
 
 function blobToFile(blob, fileName, mimeType = "audio/webm") {
-  return new File([blob], fileName, { type: mimeType });
+  return new window.File([blob], fileName, { type: mimeType });
 }
 
 async function uploadVoiceBlob(blob, mimeType) {
@@ -1275,6 +1375,91 @@ function stopAudio(msg) {
   }
 }
 
+function getFileExtension(msg) {
+  const name = msg.name || msg.content || "";
+  if (!name.includes(".")) return "";
+  return name.split(".").pop()?.toLowerCase() || "";
+}
+
+function getFileIconComponent(msg) {
+  const ext = getFileExtension(msg);
+  if (["xlsx", "xls", "csv"].includes(ext)) return FileSpreadsheet;
+  if (["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"].includes(ext)) return FileImage;
+  if (["md", "mdx", "json", "xml", "html", "css", "js", "ts"].includes(ext)) return FileCode;
+  if (["mp3", "wav", "flac", "aac", "ogg", "webm"].includes(ext)) return Music;
+  if (["mp4", "avi", "mov", "mkv", "wmv", "flv"].includes(ext)) return Video;
+  if (["zip", "rar", "7z", "tar", "gz"].includes(ext)) return FileArchive;
+  if (["doc", "docx", "pdf", "ppt", "pptx", "txt"].includes(ext)) return FileText;
+  return FileQuestion;
+}
+
+function getFileIconColor(msg) {
+  const ext = getFileExtension(msg);
+  if (["xlsx", "xls", "csv"].includes(ext)) return "#2BA471";
+  if (["doc", "docx"].includes(ext)) return "#0052D9";
+  if (["pdf"].includes(ext)) return "#D54941";
+  if (["ppt", "pptx"].includes(ext)) return "#E37318";
+  if (["mp3", "wav", "flac", "aac", "ogg"].includes(ext)) return "#D54941";
+  if (["mp4", "avi", "mov", "mkv", "wmv"].includes(ext)) return "#D54941";
+  if (["zip", "rar", "7z", "tar", "gz"].includes(ext)) return "#E37318";
+  if (["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext)) return "#8c8c8c";
+  if (["md", "mdx", "json", "xml", "html", "css", "js", "ts"].includes(ext)) return "#8c8c8c";
+  return "#8c8c8c";
+}
+
+function formatFileSize(bytes) {
+  if (!bytes || bytes <= 0) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  let size = bytes;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex++;
+  }
+  return size.toFixed(unitIndex === 0 ? 0 : 1) + " " + units[unitIndex];
+}
+
+function handleChatAction(type, msg) {
+  switch (type) {
+    case "replay":
+      startReply(msg);
+      break;
+    case "copy":
+      copyTextToClipboard(typeof msg.content === "string" ? msg.content : "");
+      break;
+    case "good":
+      msg._isGood = true;
+      msg._isBad = false;
+      break;
+    case "bad":
+      msg._isGood = false;
+      msg._isBad = true;
+      break;
+    default:
+      break;
+  }
+}
+
+function copyTextToClipboard(text) {
+  if (!text) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
+}
+
 async function loadSnippets() {
   snippetLoading.value = true;
   try {
@@ -1361,7 +1546,7 @@ async function loadAppOptions() {
 async function useSnippet(snippet) {
   inputMessage.value = snippet.content || "";
   openSnippetDialog.value = false;
-  await api.useQuickReply(snippet.id).catch(() => {});
+  await api.useQuickReply(snippet.id).catch(() => { });
   if (canControlSession.value && String(inputMessage.value || "").trim()) {
     sendText();
   }
@@ -1461,8 +1646,8 @@ function onIncomingMessage(message) {
   const mappedComparable = String(
     mapped.content_type === BUSINESS_CONTENT_TYPES.FILE ? (mapped.url || mapped.content || "")
       : mapped.content_type === BUSINESS_CONTENT_TYPES.AUDIO ? (mapped.url || mapped.content || "")
-      : mapped.content_type === BUSINESS_CONTENT_TYPES.IMAGE ? (mapped.url || mapped.content || "")
-      : (mapped.content || "")
+        : mapped.content_type === BUSINESS_CONTENT_TYPES.IMAGE ? (mapped.url || mapped.content || "")
+          : (mapped.content || "")
   ).trim();
   if (mapped.business_type === BUSINESS_MESSAGE_TYPES.AGENT && mapped.isSelf) {
     for (let i = messages.value.length - 1; i >= 0; i--) {
@@ -1473,8 +1658,8 @@ function onIncomingMessage(message) {
       const localComparable = String(
         local.content_type === BUSINESS_CONTENT_TYPES.FILE ? (local.url || local.content || "")
           : local.content_type === BUSINESS_CONTENT_TYPES.AUDIO ? (local.url || local.content || "")
-          : local.content_type === BUSINESS_CONTENT_TYPES.IMAGE ? (local.url || local.content || "")
-          : (local.content || "")
+            : local.content_type === BUSINESS_CONTENT_TYPES.IMAGE ? (local.url || local.content || "")
+              : (local.content || "")
       ).trim();
       if (
         (payloadClientID && local.client_id === payloadClientID) ||
@@ -1504,7 +1689,7 @@ function onIncomingMessage(message) {
   if (selectedSession.value?.sid === sid) {
     appendMessage(mapped);
     if (canControlSession.value) {
-      api.readSession(sid).catch(() => {});
+      api.readSession(sid).catch(() => { });
     }
     if (idx >= 0) {
       sessions.value[idx].unread_count = 0;
@@ -1563,7 +1748,7 @@ async function maybeDesktopNotify(sid, msg) {
   lastNotifyAtBySid.set(sid, now);
 
   if (Notification.permission === "default") {
-    await Notification.requestPermission().catch(() => {});
+    await Notification.requestPermission().catch(() => { });
   }
   if (Notification.permission !== "granted") return;
 
@@ -1747,7 +1932,7 @@ onBeforeUnmount(() => {
   gap: 0.4rem;
 }
 
-.inbox-filter-row > * {
+.inbox-filter-row>* {
   min-width: 0;
 }
 
@@ -1841,6 +2026,8 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow: hidden;
   background: #ffffff;
+  container-type: inline-size;
+  container-name: inbox-chat;
 }
 
 .chat-head {
@@ -1968,6 +2155,20 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
+.msg-rich-content {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.msg-rich-content.self {
+  align-items: flex-start;
+}
+
 .msg-name {
   margin: 0;
   font-size: 11px;
@@ -1997,6 +2198,13 @@ onBeforeUnmount(() => {
   line-height: 1.45;
 }
 
+.msg-bubble.self {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 68%, #1e40af 100%);
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
+}
+
 .msg-row.self .msg-bubble {
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 68%, #1e40af 100%);
   border-color: transparent;
@@ -2006,21 +2214,28 @@ onBeforeUnmount(() => {
 
 .msg-reply-quote {
   border-left: 2px solid #93c5fd;
-  background: rgba(219, 234, 254, 0.35);
+  background: rgba(241, 245, 249, 0.96);
   border-radius: 8px;
-  padding: 4px 7px;
-  margin-bottom: 6px;
+  padding: 6px 10px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
 }
 
 .msg-reply-quote.self {
-  border-left-color: #bfdbfe;
-  background: rgba(191, 219, 254, 0.22);
+  border-left-color: #60a5fa;
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .msg-reply-quote-head {
   margin: 0;
   font-size: 11px;
-  color: #2563eb;
+  color: #1d4ed8;
+  line-height: 1.35;
+}
+
+.msg-rich-content.self .msg-reply-quote-head {
+  color: #1d4ed8;
 }
 
 .msg-row.self .msg-reply-quote-head {
@@ -2030,11 +2245,24 @@ onBeforeUnmount(() => {
 .msg-reply-quote-preview {
   margin: 1px 0 0;
   font-size: 11px;
-  color: #475569;
+  color: #334155;
+  line-height: 1.45;
+}
+
+.msg-rich-content.self .msg-reply-quote-preview {
+  color: #1e293b;
 }
 
 .msg-row.self .msg-reply-quote-preview {
   color: #dbeafe;
+}
+
+.msg-image-wrap {
+  display: inline-flex;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: zoom-in;
 }
 
 .msg-image {
@@ -2087,6 +2315,47 @@ onBeforeUnmount(() => {
   word-break: break-all;
 }
 
+.msg-markdown-content {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.msg-markdown-content p {
+  margin: 0 0 4px;
+}
+
+.msg-markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+.msg-markdown-content pre {
+  margin: 4px 0;
+  white-space: pre-wrap;
+  background: rgba(15, 23, 42, 0.06);
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 12px;
+  overflow-x: auto;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.msg-markdown-content code {
+  background: rgba(15, 23, 42, 0.08);
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.msg-markdown-content a {
+  color: #2563eb;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
 .msg-audio-pill {
   display: inline-flex;
   align-items: center;
@@ -2108,6 +2377,10 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
+.msg-rich-content.self .msg-audio-symbol {
+  color: #dbeafe;
+}
+
 .msg-row.self .msg-audio-symbol {
   color: #dbeafe;
 }
@@ -2122,6 +2395,10 @@ onBeforeUnmount(() => {
   justify-content: center;
   padding: 1px;
   border-radius: 9999px;
+}
+
+.msg-rich-content.self .msg-audio-icon-btn {
+  color: #dbeafe;
 }
 
 .msg-row.self .msg-audio-icon-btn {
@@ -2143,8 +2420,16 @@ onBeforeUnmount(() => {
   color: #4b5563;
 }
 
+.msg-rich-content.self .msg-audio-duration {
+  color: #dbeafe;
+}
+
 .msg-row.self .msg-audio-duration {
   color: #dbeafe;
+}
+
+.msg-hidden-audio {
+  display: none;
 }
 
 .file-link {
@@ -2153,6 +2438,321 @@ onBeforeUnmount(() => {
   text-underline-offset: 2px;
   font-size: 13px;
   line-height: 1.45;
+}
+
+.kefu-file-bubble {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.02);
+  min-width: 220px;
+  max-width: 320px;
+}
+
+.kefu-file-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+}
+
+.kefu-file-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.kefu-file-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.kefu-file-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kefu-file-size {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.kefu-file-download {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  border: none;
+  background: transparent;
+  margin-left: 8px;
+}
+
+.kefu-file-download:hover {
+  color: #2563eb;
+  background: #eef3fa;
+}
+
+:deep(.t-chat-message),
+:deep(.t-chat__item__inner) {
+  width: 100%;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  margin-bottom: 12px;
+}
+
+:deep(.t-chat-message--user),
+:deep(.t-chat__item__role--user) {
+  flex-direction: row !important;
+  justify-content: flex-start !important;
+}
+
+:deep(.t-chat-message__avatar),
+:deep(.t-chat__item__avatar) {
+  flex-shrink: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+:deep(.t-chat-message__header),
+:deep(.t-chat__item__header) {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px;
+}
+
+:deep(.t-chat-message__name),
+:deep(.t-chat__item__name) {
+  margin-right: 4px;
+}
+
+:deep(.t-chat-message__main),
+:deep(.t-chat__item__main) {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(100%, calc(100% - 56px));
+}
+
+:deep(.t-chat-message__content),
+:deep(.t-chat__item__content) {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 0 1 auto;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+}
+
+:deep(.t-chat-message--user .t-chat-message__main),
+:deep(.t-chat__item__role--user .t-chat__item__main) {
+  align-items: flex-start;
+}
+
+:deep(.t-chat-message--user .t-chat-message__content),
+:deep(.t-chat__item__role--user .t-chat__item__content) {
+  align-items: flex-start;
+}
+
+:deep(.t-chat__item__detail) {
+  max-width: 100%;
+  overflow-x: auto;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+:deep(.t-chat-markdown) {
+  max-width: 100%;
+  overflow-x: auto;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+@container inbox-chat (min-width: 800px) {
+  :deep(.t-chat-message--user),
+  :deep(.t-chat__item__role--user) {
+    flex-direction: row-reverse !important;
+    justify-content: flex-start !important;
+  }
+
+  :deep(.t-chat-message__main),
+  :deep(.t-chat__item__main) {
+    max-width: min(82%, 860px);
+  }
+
+  :deep(.t-chat-message--user .t-chat-message__main),
+  :deep(.t-chat__item__role--user .t-chat__item__main) {
+    align-items: flex-end;
+    margin-left: auto;
+  }
+
+  :deep(.t-chat-message--user .t-chat-message__content),
+  :deep(.t-chat__item__role--user .t-chat__item__content) {
+    align-items: flex-end;
+  }
+}
+
+:deep(.t-chat-message__actionbar) {
+  margin-top: 6px;
+}
+
+.kefu-custom-actionbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.kefu-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.kefu-action-btn:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.kefu-action-btn.active {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+:deep(.t-chat-sender) {
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+:deep(.t-chat-sender__textarea) {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+:deep(.t-chat-sender__textarea textarea) {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+:deep(.t-chat-sender__footer) {
+  padding: 4px 8px;
+}
+
+.kefu-input-toolbar {
+  display: flex;
+  gap: 0;
+  padding: 4px 0;
+  background: transparent;
+  border: none;
+}
+
+.kefu-tool-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: #5b6b7c;
+  border-radius: 8px;
+  padding: 8px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.kefu-tool-btn:hover:not(:disabled) {
+  background: #eef3fa;
+  color: #2563eb;
+}
+
+.kefu-tool-btn:active:not(:disabled) {
+  background: #dbeafe;
+  transform: scale(0.96);
+}
+
+.kefu-tool-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.kefu-tool-btn.active {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  color: #dc2626;
+  box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.15);
+}
+
+.kefu-tool-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.kefu-tool-btn:hover:not(:disabled) .kefu-tool-icon {
+  background: rgba(37, 99, 235, 0.08);
+  color: #2563eb;
+}
+
+.kefu-recording-pulse {
+  animation: kefu-pulse-record 1.4s ease-in-out infinite;
+  color: #dc2626 !important;
+  background: rgba(220, 38, 38, 0.1) !important;
+}
+
+@keyframes kefu-pulse-record {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
 }
 
 .msg-meta-line {
@@ -2183,6 +2783,13 @@ onBeforeUnmount(() => {
   margin: 0;
   font-size: 11px;
   color: #94a3b8;
+}
+
+.msg-status-failed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #dc2626;
 }
 
 .retry-btn {

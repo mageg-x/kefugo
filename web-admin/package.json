@@ -15,6 +15,7 @@
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
     "@tailwindcss/vite": "^4.1.18",
+    "@tdesign-vue-next/chat": "^0.5.2",
     "axios": "^1.13.4",
     "dompurify": "^3.2.6",
     "element-plus": "^2.13.2",
@@ -24,6 +25,7 @@
     "pinia": "^3.0.4",
     "qrcodejs2": "^0.0.2",
     "tailwindcss": "^4.1.18",
+    "tdesign-vue-next": "^1.19.1",
     "vue": "^3.5.27",
     "vue-router": "^5.0.2"
   },

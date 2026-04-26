@@ -290,6 +290,7 @@ export function buildInboxUiMessageFromOutgoing(contentType, data = {}, options 
         name: payload.name,
         size: payload.size,
         duration: payload.duration,
+        replyTo: payload.reply_to,
       },
     },
     {

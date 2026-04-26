@@ -690,41 +690,29 @@ func (vc *VisitorController) WSHandler(c *gin.Context) {
 	registerVisitorConn(session.SID, visitorConn)
 	defer unregisterVisitorConnInstance(session.SID, visitorConn)
 
-	// 如果会话没有消息记录（首次访问），发送欢迎语
+	// 如果会话没有消息记录（首次访问），发送欢迎语。
+	// 欢迎语只作为当前连接的临时提示，不写入历史消息，避免固定 visitor
+	// 在复用会话时反复回放很早之前的欢迎语。
 	if session.LastMessage == "" {
 		app := models.GetApp(session.AppID())
 		if app != nil && strings.TrimSpace(app.WelcomeMsg) != "" {
 			now := time.Now().Unix()
-			ms := service.GetMsgService()
-			if ms != nil {
-				// 构建欢迎消息载荷
-				welPayload := map[string]interface{}{
-					"from":         "system",
-					"from_name":    "系统",
-					"sender_name":  "系统",
-					"content_type": models.WSContentTypeText,
-					"content":      app.WelcomeMsg,
-					"timestamp":    now,
-				}
-				wb, _ := json.Marshal(welPayload)
-				welMsg := models.Message{
-					MsgType:   models.WSMessageTypeSystem,
-					Content:   app.WelcomeMsg,
-					Meta:      string(wb),
-					Timestamp: now,
-				}
-				// 保存欢迎消息到消息存储
-				if msgID, saveErr := ms.SaveMessage(session.VisitorID(), session.AppID(), session.SessionSeq(), &welMsg); saveErr == nil {
-					welMsg.MsgID = msgID
-					session.TouchMessage(welMsg.MsgType, app.WelcomeMsg, now)
-					// 推送欢迎消息给访客
-					_ = PushMessageToVisitor(session.VisitorID(), session.SID, &welMsg)
-					// 更新会话摘要信息
-					_ = ss.SaveSession(session)
-				} else {
-					logger.Errorf("visitor welcome message save failed sid=%s err=%v", session.SID, saveErr)
-				}
+			welPayload := map[string]interface{}{
+				"from":         "system",
+				"from_name":    "系统",
+				"sender_name":  "系统",
+				"content_type": models.WSContentTypeText,
+				"content":      app.WelcomeMsg,
+				"timestamp":    now,
 			}
+			wb, _ := json.Marshal(welPayload)
+			welMsg := models.Message{
+				MsgType:   models.WSMessageTypeSystem,
+				Content:   app.WelcomeMsg,
+				Meta:      string(wb),
+				Timestamp: now,
+			}
+			_ = PushMessageToVisitor(session.VisitorID(), session.SID, &welMsg)
 		}
 	}
 

@@ -94,11 +94,19 @@ function inferFileTypeByName(fileName = "") {
   return "application/octet-stream";
 }
 
+function normalizeUnixTs(value) {
+  const raw = safeNumber(value, 0);
+  if (!raw) {
+    return Date.now();
+  }
+  return raw > 1e12 ? raw : raw * 1000;
+}
+
 function toIsoTime(value) {
   if (!value) {
     return new Date().toISOString();
   }
-  const date = new Date(value);
+  const date = new Date(normalizeUnixTs(value));
   if (Number.isNaN(date.getTime())) {
     return new Date().toISOString();
   }
@@ -210,7 +218,7 @@ export function normalizeIncomingBusinessMessage(rawMessage) {
     clientId: safeString(rawMessage.payload?.client_id || rawMessage.payload?.clientId || ""),
     code: safeString(rawMessage.payload?.code || ""),
     msgId: safeString(rawMessage.msg_id || rawMessage.payload?.msg_id || ""),
-    timestamp: rawMessage.timestamp || Date.now(),
+    timestamp: normalizeUnixTs(rawMessage.timestamp || rawMessage.payload?.timestamp),
     raw: rawMessage,
   };
 }

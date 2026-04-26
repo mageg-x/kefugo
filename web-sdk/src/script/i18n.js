@@ -57,6 +57,17 @@ export const localeOptions = [
   { value: "en-US", label: languageOptions["en-US"] || "English" },
 ];
 
+const allMessages = {
+  "zh-CN": zhMessages,
+  "en-US": enMessages,
+};
+
+export function t(key, fallback = "") {
+  const locale = localeRef.value;
+  const messages = allMessages[locale] || zhMessages;
+  return messages[key] || fallback || key;
+}
+
 const textOriginalMap = new Map();
 const attrOriginalMap = new Map();
 let observer = null;

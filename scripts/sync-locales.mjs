@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "url";
 
-const root = path.resolve(new URL(".", import.meta.url).pathname, "..");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const root = path.resolve(__dirname, "..");
 
 const sourceDir = path.join(root, "web-admin", "src", "locales");
 const files = ["zh-CN.json", "en-US.json"];

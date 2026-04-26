@@ -1,4 +1,8 @@
 import { createApp } from "vue";
+import TDesign from "tdesign-vue-next";
+import "tdesign-vue-next/es/style/index.css";
+import Chat from "@tdesign-vue-next/chat";
+import "@tdesign-vue-next/chat/es/style/index.css";
 import "./style.css";
 import Widget from "./components/Widget.vue";
 
@@ -14,6 +18,8 @@ export function mountKefuWidget(props) {
   document.body.appendChild(div);
 
   const app = createApp(Widget, props);
+  app.use(TDesign);
+  app.use(Chat);
   app.mount("#kefu-widget-root");
 
   setTimeout(() => {
