@@ -158,6 +158,15 @@ func NewExternalLLMClient(cfg models.APIModelConfig) (*ExternalLLMClient, error)
 	}, nil
 }
 
+func (c *ExternalLLMClient) streamHTTPClient() *http.Client {
+	if c == nil || c.client == nil {
+		return &http.Client{}
+	}
+	clone := *c.client
+	clone.Timeout = 0
+	return &clone
+}
+
 type externalChatCompletionRequest struct {
 	Model       string                `json:"model"`
 	Messages    []ExternalChatMessage `json:"messages"`
@@ -214,6 +223,28 @@ func parseExternalContent(raw interface{}) string {
 	}
 }
 
+func parseExternalStreamContent(raw interface{}) string {
+	switch v := raw.(type) {
+	case string:
+		return v
+	case []interface{}:
+		parts := make([]string, 0, len(v))
+		for _, item := range v {
+			obj, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			text, _ := obj["text"].(string)
+			if text != "" {
+				parts = append(parts, text)
+			}
+		}
+		return strings.Join(parts, "")
+	default:
+		return ""
+	}
+}
+
 func (c *ExternalLLMClient) Generate(ctx context.Context, messages []ExternalChatMessage) (string, error) {
 	if c == nil {
 		return "", fmt.Errorf("external llm client is nil")
@@ -242,7 +273,7 @@ func (c *ExternalLLMClient) Generate(ctx context.Context, messages []ExternalCha
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 
-	resp, err := c.client.Do(req)
+	resp, err := c.streamHTTPClient().Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -339,7 +370,6 @@ func (c *ExternalLLMClient) GenerateStream(
 
 	var merged strings.Builder
 	emit := func(part string) {
-		part = strings.TrimSpace(part)
 		if part == "" {
 			return
 		}
@@ -373,9 +403,9 @@ func (c *ExternalLLMClient) GenerateStream(
 		if len(out.Choices) == 0 {
 			continue
 		}
-		part := parseExternalContent(out.Choices[0].Delta.Content)
+		part := parseExternalStreamContent(out.Choices[0].Delta.Content)
 		if part == "" {
-			part = parseExternalContent(out.Choices[0].Message.Content)
+			part = parseExternalStreamContent(out.Choices[0].Message.Content)
 		}
 		emit(part)
 	}
@@ -479,8 +509,13 @@ func buildRAGPrompt(query string, hits []VectorHit) string {
 	parts = append(parts,
 		"你是客服机器人助手。",
 		"仅基于提供的知识片段作答，不要编造事实。",
-		"先给结论，再给最多 4 条关键要点。",
-		"尽量简洁，避免重复铺垫；证据不足就直接说明信息不足。",
+		"必须使用 Markdown 格式输出。",
+		"先给 1 句结论；如需展开，再给最多 3 条关键要点。",
+		"如果有要点，使用 Markdown 有序列表或无序列表，不要写成长段落。",
+		"严格控制换行：不要连续空两行；结论后直接接列表；列表项之间不要空行。",
+		"禁止重复同一句意思，禁止凑字数，禁止把同一要点改写多次。",
+		"每条要点只说一个事实，尽量短句，不要输出 10 条以上列表。",
+		"证据不足就直接说明信息不足，不要延伸发挥。",
 		"",
 		"知识片段：",
 	)
@@ -517,7 +552,7 @@ func buildRAGPrompt(query string, hits []VectorHit) string {
 		totalCtxChars += nextLen
 		used++
 	}
-	parts = append(parts, "", "用户问题：", query, "", "请回答：")
+	parts = append(parts, "", "用户问题：", query, "", "请用 Markdown 格式回答：")
 	return strings.Join(parts, "\n")
 }
 
@@ -557,7 +592,7 @@ func AnswerWithAPIModelWithSystemPrompt(
 	}
 	systemPrompt = strings.TrimSpace(systemPrompt)
 	if systemPrompt == "" {
-		systemPrompt = "你是一个专业客服助手，请严格基于知识片段回答问题。"
+		systemPrompt = "你是一个专业客服助手，请严格基于知识片段回答问题，并始终使用 Markdown 输出。不要连续空两行，结论后直接接列表，列表项之间不要空行。"
 	}
 	client, err := NewExternalLLMClient(cfg)
 	if err != nil {
@@ -635,7 +670,7 @@ func AnswerWithAPIModelStreamWithSystemPrompt(
 	}
 	systemPrompt = strings.TrimSpace(systemPrompt)
 	if systemPrompt == "" {
-		systemPrompt = "你是一个专业客服助手，请严格基于知识片段回答问题。"
+		systemPrompt = "你是一个专业客服助手，请严格基于知识片段回答问题，并始终使用 Markdown 输出。不要连续空两行，结论后直接接列表，列表项之间不要空行。"
 	}
 	client, err := NewExternalLLMClient(cfg)
 	if err != nil {
@@ -679,7 +714,7 @@ func AnswerWithEnabledAPIModelStreamWithSystemPrompt(
 	}
 	answer, err := AnswerWithAPIModelStreamWithSystemPrompt(ctx, cfg, query, hits, systemPrompt, onDelta)
 	if err != nil {
-		return nil, models.APIModelConfig{}, err
+		return nil, cfg, err
 	}
 	return answer, cfg, nil
 }

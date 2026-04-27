@@ -201,7 +201,10 @@
         <div class="qa-list">
           <article v-for="(item, idx) in qaHistory" :key="`${idx}-${item.question}`" class="qa-card">
             <div class="qa-question">👤 {{ item.question }}</div>
-            <div class="qa-answer">🤖 {{ item.answer }}</div>
+            <div class="qa-answer">
+              <span class="qa-answer-icon">🤖</span>
+              <div class="qa-answer-main qa-markdown-content" v-html="renderMarkdownAnswer(item.answer)"></div>
+            </div>
             <div class="qa-sources" v-if="item.sources?.length">
               <span>{{ t("pageKnowledge.word.references") }}:</span>
               <el-tooltip
@@ -411,7 +414,9 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import DOMPurify from "dompurify";
 import { ElMessage, ElMessageBox } from "element-plus";
+import { marked } from "marked";
 import api from "@/script/api";
 import { t } from "@/script/i18n-text";
 import { useStore } from "@/script/store";
@@ -455,6 +460,11 @@ const qaHistory = ref([]);
 const qaStreaming = ref(false);
 const store = useStore();
 let qaAbortController = null;
+let qaAbortSilently = false;
+const MARKDOWN_SANITIZE_OPTIONS = {
+  USE_PROFILES: { html: true },
+  ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|\/|#)/i,
+};
 
 const newBaseVisible = ref(false);
 const creatingBase = ref(false);
@@ -576,6 +586,30 @@ function formatFileSize(size) {
   if (n < 1024) return `${n}B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
   return `${(n / 1024 / 1024).toFixed(1)}MB`;
+}
+
+function escapeMarkdownText(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function renderMarkdownAnswer(value) {
+  const text = String(value || "");
+  if (!text.trim()) {
+    return "";
+  }
+  const compact = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/\n[ \t]*\n+/g, "\n")
+    .trim();
+  const safe = escapeMarkdownText(compact);
+  const html = String(marked.parse(safe, { gfm: true, breaks: true }));
+  return DOMPurify.sanitize(html, MARKDOWN_SANITIZE_OPTIONS);
 }
 
 function statusLabel(status) {
@@ -990,6 +1024,7 @@ async function runRetrieveTest() {
 
 function cancelQATestStream() {
   if (qaAbortController) {
+    qaAbortSilently = true;
     qaAbortController.abort();
     qaAbortController = null;
   }
@@ -1050,10 +1085,9 @@ async function runQATest() {
   });
   qaHistory.value.push(historyItem);
   qaInput.value = "";
-  const timeoutMs = Math.max(15000, Math.min(900000, getQATimeoutSec() * 1000 + 10000));
   const controller = new AbortController();
   qaAbortController = controller;
-  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  qaAbortSilently = false;
   try {
     const resp = await fetch(`${api.baseURL}/knowledge-bases/${currentBaseID.value}/qa-test-stream`, {
       method: "POST",
@@ -1143,17 +1177,20 @@ async function runQATest() {
   } catch (err) {
     qaHistory.value = qaHistory.value.filter((item) => item !== historyItem);
     const message = String(err?.message || "");
+    if (err?.name === "AbortError" && qaAbortSilently) {
+      return;
+    }
     if (err?.name === "AbortError" || message.includes("timeout")) {
       ElMessage.error(t("pageKnowledge.toast.qaTimeout"));
     } else {
       ElMessage.error(message || t("pageKnowledge.toast.qaFailed"));
     }
   } finally {
-    window.clearTimeout(timer);
     historyItem.streaming = false;
     if (qaAbortController === controller) {
       qaAbortController = null;
     }
+    qaAbortSilently = false;
     qaStreaming.value = false;
   }
 }
@@ -1824,8 +1861,119 @@ onBeforeUnmount(() => {
 }
 
 .qa-answer {
-  margin-top: 8px;
+  margin-top: 6px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   color: #111827;
+  background: linear-gradient(180deg, #f8fbff 0%, #fdfefe 100%);
+  border: 1px solid #e0e7ff;
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+
+.qa-answer-icon {
+  flex: 0 0 auto;
+  line-height: 1.5;
+}
+
+.qa-answer-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.qa-markdown-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #0f172a;
+  line-height: 14px;
+  font-size: 12px;
+}
+
+.qa-markdown-content :deep(p) {
+  margin: 0 !important;
+  line-height: 14px;
+}
+
+.qa-markdown-content :deep(p + p) {
+  margin-top: 0 !important;
+}
+
+.qa-markdown-content :deep(ul),
+.qa-markdown-content :deep(ol) {
+  margin: 0 !important;
+  padding: 0 0 0 16px;
+  line-height: 14px;
+}
+
+.qa-markdown-content :deep(li + li) {
+  margin-top: 0 !important;
+}
+
+.qa-markdown-content :deep(li) {
+  line-height: 14px;
+  margin: 0 !important;
+  padding: 0;
+}
+
+.qa-markdown-content :deep(h1),
+.qa-markdown-content :deep(h2),
+.qa-markdown-content :deep(h3),
+.qa-markdown-content :deep(h4) {
+  margin: 0 !important;
+  line-height: 1.1;
+}
+
+.qa-markdown-content :deep(br) {
+  display: block;
+  content: "";
+  margin: 0;
+  line-height: 0;
+}
+
+.qa-markdown-content :deep(li::marker) {
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.qa-markdown-content :deep(code) {
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+}
+
+.qa-markdown-content :deep(pre) {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #e2e8f0;
+  overflow-x: auto;
+}
+
+.qa-markdown-content :deep(pre code) {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.qa-markdown-content :deep(blockquote) {
+  margin: 0 !important;
+  padding-left: 8px;
+  border-left: 3px solid #bfdbfe;
+  color: #475569;
+}
+
+.qa-markdown-content :deep(ol + p),
+.qa-markdown-content :deep(ul + p),
+.qa-markdown-content :deep(p + ol),
+.qa-markdown-content :deep(p + ul),
+.qa-markdown-content :deep(ol + ul),
+.qa-markdown-content :deep(ul + ol) {
+  margin-top: 0 !important;
 }
 
 .qa-sources {

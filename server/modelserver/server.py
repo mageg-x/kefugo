@@ -41,14 +41,19 @@ RERANK_INSTRUCTION = os.environ.get(
     "Given a user query, retrieve relevant passages that answer the query",
 )
 
-N_THREADS = int(os.environ.get("N_THREADS", "4"))
+CPU_COUNT = max(1, os.cpu_count() or 1)
+DEFAULT_THREADS = max(1, CPU_COUNT - 1)
+N_THREADS = int(os.environ.get("N_THREADS", str(DEFAULT_THREADS)))
+CHAT_THREADS = int(os.environ.get("CHAT_THREADS", str(N_THREADS)))
+EMBED_THREADS = int(os.environ.get("EMBED_THREADS", str(N_THREADS)))
+RERANK_THREADS = int(os.environ.get("RERANK_THREADS", str(N_THREADS)))
 CTX_SIZE = int(os.environ.get("CTX_SIZE", "2048"))
 EMBED_CTX = int(os.environ.get("EMBED_CTX", "512"))
 N_BATCH = int(os.environ.get("N_BATCH", "512"))
 CHAT_MAX_TOKENS = int(os.environ.get("CHAT_MAX_TOKENS", "256"))
 RERANK_MAX_LENGTH = int(os.environ.get("RERANK_MAX_LENGTH", "512"))
 
-torch.set_num_threads(max(1, N_THREADS))
+torch.set_num_threads(max(1, RERANK_THREADS))
 
 
 def resolve_model_path(name: str) -> str:
@@ -65,7 +70,7 @@ print("Loading chat model...")
 chat_llm = Llama(
     model_path=resolve_model_path(CHAT_MODEL),
     n_ctx=CTX_SIZE,
-    n_threads=N_THREADS,
+    n_threads=max(1, CHAT_THREADS),
     n_batch=N_BATCH,
     verbose=False,
 )
@@ -75,7 +80,7 @@ embed_llm = Llama(
     model_path=resolve_model_path(EMBED_MODEL),
     embedding=True,
     n_ctx=EMBED_CTX,
-    n_threads=N_THREADS,
+    n_threads=max(1, EMBED_THREADS),
     n_batch=N_BATCH,
     verbose=False,
 )
@@ -88,6 +93,12 @@ rerank_model = AutoModelForSequenceClassification.from_pretrained(
     local_files_only=True,
 )
 rerank_model.eval()
+print(
+    f"Runtime config: cpu_count={CPU_COUNT} chat_threads={max(1, CHAT_THREADS)} "
+    f"embed_threads={max(1, EMBED_THREADS)} rerank_threads={max(1, RERANK_THREADS)} "
+    f"n_batch={N_BATCH}",
+    flush=True,
+)
 print("All models loaded.")
 
 chat_lock = threading.Lock()
@@ -343,23 +354,25 @@ def stream_chat_completion(req: ChatRequest, started_at: float):
     prompt_chars = sum(len((msg.content or "")) for msg in req.messages)
     answer_parts = []
     chunk_count = 0
-
-    started = {
-        "id": payload_id,
-        "object": "chat.completion.chunk",
-        "created": created,
-        "model": model_name,
-        "choices": [
-            {
-                "index": 0,
-                "delta": {"role": "assistant"},
-                "finish_reason": None,
-            }
-        ],
-    }
-    yield f"data: {json.dumps(started, ensure_ascii=False)}\n\n"
+    stream_error = None
+    first_chunk_logged = False
 
     try:
+        started = {
+            "id": payload_id,
+            "object": "chat.completion.chunk",
+            "created": created,
+            "model": model_name,
+            "choices": [
+                {
+                    "index": 0,
+                    "delta": {"role": "assistant"},
+                    "finish_reason": None,
+                }
+            ],
+        }
+        yield f"data: {json.dumps(started, ensure_ascii=False)}\n\n"
+
         with chat_lock:
             stream = chat_llm(
                 prompt,
@@ -371,11 +384,22 @@ def stream_chat_completion(req: ChatRequest, started_at: float):
             for piece in stream:
                 text = ""
                 if piece and piece.get("choices"):
-                    text = str(piece["choices"][0].get("text") or "")
-                if not text:
+                    choice = piece["choices"][0] or {}
+                    text = str(choice.get("text") or "")
+                    if not text and isinstance(choice.get("delta"), dict):
+                        text = str(choice["delta"].get("content") or "")
+                    if not text and isinstance(choice.get("message"), dict):
+                        text = str(choice["message"].get("content") or "")
+                if text == "":
                     continue
                 answer_parts.append(text)
                 chunk_count += 1
+                if not first_chunk_logged:
+                    print(
+                        f"stream: endpoint=chat.completions first_chunk_chars={len(text)} true_stream=True",
+                        flush=True,
+                    )
+                    first_chunk_logged = True
                 chunk = {
                     "id": payload_id,
                     "object": "chat.completion.chunk",
@@ -390,6 +414,20 @@ def stream_chat_completion(req: ChatRequest, started_at: float):
                     ],
                 }
                 yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+    except Exception as exc:
+        stream_error = exc
+        print(f"error: endpoint=chat.completions.stream detail={type(exc).__name__}: {exc}", flush=True)
+        err_chunk = {
+            "id": payload_id,
+            "object": "chat.completion.chunk",
+            "created": created,
+            "model": model_name,
+            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+            "error": {"message": str(exc)},
+        }
+        yield f"data: {json.dumps(err_chunk, ensure_ascii=False)}\n\n"
+        yield "data: [DONE]\n\n"
+        return
     finally:
         answer_text = "".join(answer_parts).strip()
         log_timing(
@@ -400,6 +438,7 @@ def stream_chat_completion(req: ChatRequest, started_at: float):
             prompt_chars=prompt_chars,
             answer_chars=len(answer_text),
             chunks=chunk_count,
+            error=type(stream_error).__name__ if stream_error else None,
         )
 
     done = {
