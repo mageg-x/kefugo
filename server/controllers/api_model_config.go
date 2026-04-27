@@ -130,13 +130,8 @@ func validateAPIModelConfigInput(item models.APIModelConfig) bool {
 	if !models.ValidAIModelType(item.ModelType) {
 		return false
 	}
-	rawKey := strings.TrimSpace(utils.DecryptAPIKey(item.APIKey))
 	switch item.Provider {
-	case "openai", "qwen", "deepseek", "zhipu", "cohere", "jina":
-		if rawKey == "" {
-			return false
-		}
-	case "ollama":
+	case "openai", "qwen", "deepseek", "zhipu", "cohere", "jina", "ollama":
 	default:
 		return false
 	}
@@ -212,7 +207,9 @@ func (ac *APIModelConfigController) Create(c *gin.Context) {
 		item.IsDefault = *req.IsDefault
 	}
 	if item.ModelType == string(models.AIModelTypeEmbedding) && item.Dims <= 0 {
-		if detectedDims, err := autoDetectEmbeddingDims(c.Request.Context(), item); err == nil && detectedDims > 0 {
+		detectCtx, cancel := modelConfigOperationContext(item, 10*time.Second, 60*time.Second)
+		defer cancel()
+		if detectedDims, err := autoDetectEmbeddingDims(detectCtx, item); err == nil && detectedDims > 0 {
 			item.Dims = detectedDims
 		}
 	}
@@ -285,7 +282,9 @@ func (ac *APIModelConfigController) Update(c *gin.Context) {
 	}
 	item = serviceClampAPIModelConfig(item)
 	if item.ModelType == string(models.AIModelTypeEmbedding) && item.Dims <= 0 {
-		if detectedDims, err := autoDetectEmbeddingDims(c.Request.Context(), item); err == nil && detectedDims > 0 {
+		detectCtx, cancel := modelConfigOperationContext(item, 10*time.Second, 60*time.Second)
+		defer cancel()
+		if detectedDims, err := autoDetectEmbeddingDims(detectCtx, item); err == nil && detectedDims > 0 {
 			item.Dims = detectedDims
 		}
 	}
@@ -354,7 +353,7 @@ func (ac *APIModelConfigController) Test(c *gin.Context) {
 	if timeout <= 0 {
 		timeout = 60
 	}
-	ctx, cancel := context.WithTimeout(c.Request.Context(), time.Duration(timeout+10)*time.Second)
+	ctx, cancel := modelConfigOperationContext(item, 10*time.Second, time.Duration(timeout)*time.Second)
 	defer cancel()
 
 	var text string

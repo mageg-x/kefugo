@@ -164,6 +164,7 @@ func SetupRouter() *gin.Engine {
 				knowledgeBases.DELETE("/:id/chunks/:chunkID", knowledgeWorkspaceController.DeleteChunk)
 				knowledgeBases.POST("/:id/retrieve-test", knowledgeWorkspaceController.RetrieveTest)
 				knowledgeBases.POST("/:id/qa-test", knowledgeWorkspaceController.QATest)
+				knowledgeBases.POST("/:id/qa-test-stream", knowledgeWorkspaceController.QATestStream)
 				knowledgeBases.POST("/:id/feedback", knowledgeWorkspaceController.SaveFeedback)
 			}
 

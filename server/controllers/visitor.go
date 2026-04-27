@@ -459,7 +459,7 @@ func (vc *VisitorController) AIBotTest(c *gin.Context) {
 	}
 
 	cfg := getSystemSettingsCached()
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
+	ctx, cancel := knowledgeQAContext()
 	defer cancel()
 	answer := strings.TrimSpace(vc.generateAIBotAnswer(ctx, &models.Session{SID: models.GetSessionID("ai_test", appID, 0)}, query, cfg, "", nil))
 	if answer == "" {

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,6 +20,43 @@ var (
 	rebuildMu     sync.Mutex
 	rebuildActive = map[uint]bool{}
 )
+
+const (
+	rebuildBatchSize         = 50
+	rebuildProgressStepCount = 5
+)
+
+func updateRebuildTaskProgress(taskID uint, doneCount int, totalCount int, status string) {
+	progress := 0
+	if totalCount > 0 {
+		progress = int(float64(doneCount) / float64(totalCount) * 100)
+		if progress > 100 {
+			progress = 100
+		}
+	}
+	updates := map[string]interface{}{
+		"done_docs":  doneCount,
+		"total_docs": totalCount,
+		"progress":   progress,
+	}
+	if strings.TrimSpace(status) != "" {
+		updates["status"] = status
+	}
+	_ = store.DB.Model(&models.RebuildTask{}).Where("id = ?", taskID).Updates(updates).Error
+}
+
+func shouldReportRebuildProgress(doneCount, lastReportedDone, totalCount int) bool {
+	if doneCount <= 0 {
+		return false
+	}
+	if doneCount >= totalCount {
+		return true
+	}
+	if lastReportedDone < 0 {
+		return true
+	}
+	return doneCount-lastReportedDone >= rebuildProgressStepCount
+}
 
 func TriggerRebuild(configID uint) (*models.RebuildTask, error) {
 	rebuildMu.Lock()
@@ -117,10 +155,6 @@ func executeRebuild(taskID uint, cfg models.APIModelConfig) {
 	createVecSQL := fmt.Sprintf(`CREATE VIRTUAL TABLE IF NOT EXISTS %s USING vec0(
 		vector_id TEXT PRIMARY KEY,
 		embedding float[%d]
-	) WITH (
-		index_type='hnsw',
-		M=16,
-		ef_construction=200
 	)`, vecTableName, cfg.Dims)
 	if _, err := sqlDB.ExecContext(ctx, createVecSQL); err != nil {
 		failRebuildTask(taskID, fmt.Sprintf("create vec table %s failed: %v", vecTableName, err))
@@ -140,14 +174,15 @@ func executeRebuild(taskID uint, cfg models.APIModelConfig) {
 
 	var totalChunks int64
 	store.DB.Model(&models.KnowledgeChunk{}).Count(&totalChunks)
+	updateRebuildTaskProgress(taskID, 0, int(totalChunks), string(models.RebuildTaskRunning))
 
-	batchSize := 50
 	offset := 0
 	doneCount := 0
+	lastReportedDone := -1
 
 	for {
 		var chunks []models.KnowledgeChunk
-		if err := store.DB.Order("id ASC").Offset(offset).Limit(batchSize).Find(&chunks).Error; err != nil {
+		if err := store.DB.Order("id ASC").Offset(offset).Limit(rebuildBatchSize).Find(&chunks).Error; err != nil {
 			failRebuildTask(taskID, fmt.Sprintf("query chunks failed: %v", err))
 			return
 		}
@@ -160,6 +195,12 @@ func executeRebuild(taskID uint, cfg models.APIModelConfig) {
 			texts[i] = c.Content
 		}
 
+		batchMeta, metaErr := loadRebuildBatchMeta(chunks)
+		if metaErr != nil {
+			failRebuildTask(taskID, fmt.Sprintf("load rebuild batch meta failed: %v", metaErr))
+			return
+		}
+
 		vecs, batchErr := provider.GetEmbeddings(ctx, texts)
 		if batchErr != nil {
 			logger.Warnf("rebuild batch embedding failed at offset %d: %v, retrying one by one", offset, batchErr)
@@ -168,37 +209,37 @@ func executeRebuild(taskID uint, cfg models.APIModelConfig) {
 				if embErr != nil {
 					logger.Warnf("rebuild chunk %d embedding failed: %v", c.ID, embErr)
 					doneCount++
+					if shouldReportRebuildProgress(doneCount, lastReportedDone, int(totalChunks)) {
+						updateRebuildTaskProgress(taskID, doneCount, int(totalChunks), string(models.RebuildTaskRunning))
+						lastReportedDone = doneCount
+					}
 					continue
 				}
-				if writeErr := writeRebuildVector(ctx, sqlDB, c, vec, vecTableName, metaTableName); writeErr != nil {
+				if writeErr := writeRebuildVector(ctx, sqlDB, c, vec, vecTableName, metaTableName, batchMeta); writeErr != nil {
 					logger.Warnf("rebuild chunk %d write failed: %v", c.ID, writeErr)
 				}
 				doneCount++
+				if shouldReportRebuildProgress(doneCount, lastReportedDone, int(totalChunks)) {
+					updateRebuildTaskProgress(taskID, doneCount, int(totalChunks), string(models.RebuildTaskRunning))
+					lastReportedDone = doneCount
+				}
 			}
 		} else {
 			for i, c := range chunks {
 				if i < len(vecs) && len(vecs[i]) > 0 {
-					if writeErr := writeRebuildVector(ctx, sqlDB, c, vecs[i], vecTableName, metaTableName); writeErr != nil {
+					if writeErr := writeRebuildVector(ctx, sqlDB, c, vecs[i], vecTableName, metaTableName, batchMeta); writeErr != nil {
 						logger.Warnf("rebuild chunk %d write failed: %v", c.ID, writeErr)
 					}
 				}
 				doneCount++
+				if shouldReportRebuildProgress(doneCount, lastReportedDone, int(totalChunks)) {
+					updateRebuildTaskProgress(taskID, doneCount, int(totalChunks), string(models.RebuildTaskRunning))
+					lastReportedDone = doneCount
+				}
 			}
 		}
 
-		offset += batchSize
-		progress := 0
-		if totalChunks > 0 {
-			progress = int(float64(doneCount) / float64(totalChunks) * 100)
-			if progress > 100 {
-				progress = 100
-			}
-		}
-		store.DB.Model(&models.RebuildTask{}).Where("id = ?", taskID).
-			Updates(map[string]interface{}{
-				"done_docs": doneCount,
-				"progress":  progress,
-			})
+		offset += rebuildBatchSize
 	}
 
 	now := time.Now()
@@ -223,21 +264,109 @@ func executeRebuild(taskID uint, cfg models.APIModelConfig) {
 	cleanupOldVecTables(ctx, sqlDB, vecTableName)
 }
 
-func writeRebuildVector(ctx context.Context, sqlDB *sql.DB, chunk models.KnowledgeChunk, vec []float32, vecTable, metaTable string) error {
-	var entry models.KnowledgeVectorEntry
-	if err := store.DB.Where("vector_id = ?", chunk.VectorID).First(&entry).Error; err != nil {
-		return err
-	}
+type rebuildChunkMeta struct {
+	Collection string
+	Metadata   string
+}
 
-	metaRaw := "{}"
-	if entry.Metadata != "" {
-		var parsed map[string]interface{}
-		if json.Unmarshal([]byte(entry.Metadata), &parsed) == nil {
-			metaRaw = entry.Metadata
+func loadRebuildBatchMeta(chunks []models.KnowledgeChunk) (map[string]rebuildChunkMeta, error) {
+	vectorIDs := make([]string, 0, len(chunks))
+	docIDs := make([]uint, 0, len(chunks))
+	for _, chunk := range chunks {
+		if strings.TrimSpace(chunk.VectorID) != "" {
+			vectorIDs = append(vectorIDs, chunk.VectorID)
+		}
+		if chunk.DocumentID > 0 {
+			docIDs = append(docIDs, chunk.DocumentID)
 		}
 	}
 
+	metaMap := make(map[string]rebuildChunkMeta, len(chunks))
+	if len(vectorIDs) > 0 {
+		var entries []models.KnowledgeVectorEntry
+		if err := store.DB.Where("vector_id IN ?", vectorIDs).Find(&entries).Error; err != nil {
+			return nil, err
+		}
+		for _, entry := range entries {
+			metaMap[entry.VectorID] = rebuildChunkMeta{
+				Collection: strings.TrimSpace(entry.Collection),
+				Metadata:   normalizeRebuildMetadata(entry.Metadata),
+			}
+		}
+	}
+
+	docMap := make(map[uint]models.KnowledgeDocument, len(docIDs))
+	if len(docIDs) > 0 {
+		var docs []models.KnowledgeDocument
+		if err := store.DB.Where("id IN ?", docIDs).Find(&docs).Error; err != nil {
+			return nil, err
+		}
+		for _, doc := range docs {
+			docMap[doc.ID] = doc
+		}
+	}
+
+	for _, chunk := range chunks {
+		current := metaMap[chunk.VectorID]
+		doc := docMap[chunk.DocumentID]
+		if current.Collection == "" {
+			current.Collection = strings.TrimSpace(doc.VectorCollection)
+		}
+		if current.Metadata == "" {
+			current.Metadata = buildRebuildMetadata(chunk, doc.Name)
+		}
+		metaMap[chunk.VectorID] = current
+	}
+
+	return metaMap, nil
+}
+
+func normalizeRebuildMetadata(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		return ""
+	}
+	return raw
+}
+
+func buildRebuildMetadata(chunk models.KnowledgeChunk, docName string) string {
+	payload := map[string]interface{}{
+		"app_id":      chunk.AppID,
+		"base_id":     chunk.BaseID,
+		"document_id": chunk.DocumentID,
+		"chunk_seq":   chunk.ChunkSeq,
+	}
+	if strings.TrimSpace(docName) != "" {
+		payload["doc_name"] = strings.TrimSpace(docName)
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return "{}"
+	}
+	return string(raw)
+}
+
+func writeRebuildVector(
+	ctx context.Context,
+	sqlDB *sql.DB,
+	chunk models.KnowledgeChunk,
+	vec []float32,
+	vecTable,
+	metaTable string,
+	metaMap map[string]rebuildChunkMeta,
+) error {
 	vecLiteral := float32SliceToSQLiteLiteral(vec)
+	meta := metaMap[chunk.VectorID]
+	if meta.Collection == "" {
+		return fmt.Errorf("missing vector collection for vector_id=%s", chunk.VectorID)
+	}
+	if meta.Metadata == "" {
+		meta.Metadata = "{}"
+	}
 
 	if _, err := sqlDB.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE vector_id = ?", vecTable), chunk.VectorID); err != nil {
 		return err
@@ -252,7 +381,7 @@ func writeRebuildVector(ctx context.Context, sqlDB *sql.DB, chunk models.Knowled
 			collection=excluded.collection,
 			metadata=excluded.metadata,
 			content=excluded.content
-	`, metaTable), chunk.VectorID, entry.Collection, metaRaw, chunk.Content); err != nil {
+	`, metaTable), chunk.VectorID, meta.Collection, meta.Metadata, chunk.Content); err != nil {
 		return err
 	}
 

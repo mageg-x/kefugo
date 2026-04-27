@@ -5,6 +5,8 @@ import { useStore } from './store'
 import { shouldResetAuth, toApiError } from './error-codes'
 
 const API_BASE_URL = `${window.location.origin}/api/v1`
+const DEFAULT_REQUEST_TIMEOUT_MS = 60000
+const AI_REQUEST_TIMEOUT_MS = 180000
 
 class ApiService {
   constructor() {
@@ -13,7 +15,7 @@ class ApiService {
     // 创建axios实例
     this.api = axios.create({
       baseURL: this.baseURL,
-      timeout: 10000,
+      timeout: DEFAULT_REQUEST_TIMEOUT_MS,
       headers: {
         'Content-Type': 'application/json'
       }
@@ -292,11 +294,11 @@ class ApiService {
 
   // AI 建议
   async suggestAIReply(sid = '', query = '', appId = '') {
-    return this.api.post('/ai/suggest', { sid, query, app_id: appId })
+    return this.api.post('/ai/suggest', { sid, query, app_id: appId }, { timeout: AI_REQUEST_TIMEOUT_MS })
   }
 
   async testAIBot(appId = '', query = '') {
-    return this.api.post('/ai/bot-test', { app_id: appId, query })
+    return this.api.post('/ai/bot-test', { app_id: appId, query }, { timeout: AI_REQUEST_TIMEOUT_MS })
   }
 
   // 新知识库工作区
@@ -326,7 +328,8 @@ class ApiService {
     return this.api.post(`/knowledge-bases/${baseID}/documents/upload`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
-      }
+      },
+      timeout: 10 * 60 * 1000
     })
   }
 
@@ -350,8 +353,11 @@ class ApiService {
     return this.api.delete(`/knowledge-bases/${baseID}/chunks/${chunkID}`)
   }
 
-  async knowledgeRetrieveTest(baseID, query, topK = 5) {
-    return this.api.post(`/knowledge-bases/${baseID}/retrieve-test`, { query, top_k: topK })
+  async knowledgeRetrieveTest(baseID, query, topK = 5, timeoutSec = 120) {
+    const payload = { query, top_k: topK }
+    const timeoutNum = Number(timeoutSec || 120)
+    const timeoutMs = Math.max(15000, Math.min(900000, (Number.isFinite(timeoutNum) ? timeoutNum : 120) * 1000 + 10000))
+    return this.api.post(`/knowledge-bases/${baseID}/retrieve-test`, payload, { timeout: timeoutMs })
   }
 
   async knowledgeQATest(baseID, query, topK = 5, timeoutSec = 120) {
@@ -371,11 +377,11 @@ class ApiService {
   }
 
   async createAPIModel(data) {
-    return this.api.post('/admin/api-models', data)
+    return this.api.post('/admin/api-models', data, { timeout: AI_REQUEST_TIMEOUT_MS })
   }
 
   async updateAPIModel(id, data) {
-    return this.api.put(`/admin/api-models/${id}`, data)
+    return this.api.put(`/admin/api-models/${id}`, data, { timeout: AI_REQUEST_TIMEOUT_MS })
   }
 
   async deleteAPIModel(id) {

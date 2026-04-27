@@ -40,9 +40,6 @@ type CohereProvider struct {
 
 func NewCohereProvider(cfg *models.APIModelConfig) (*CohereProvider, error) {
 	apiKey := strings.TrimSpace(cfg.APIKey)
-	if apiKey == "" {
-		return nil, fmt.Errorf("cohere rerank api key is required")
-	}
 	timeout := cfg.TimeoutSec
 	if timeout <= 0 {
 		timeout = 60
@@ -94,7 +91,9 @@ func (p *CohereProvider) Rerank(query string, candidates []Candidate, topN int) 
 		return nil, fmt.Errorf("cohere rerank create request failed: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+p.apiKey)
+	if apiKey := strings.TrimSpace(p.apiKey); apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
 
 	resp, err := p.client.Do(req)
 	if err != nil {

@@ -13,14 +13,14 @@ import (
 	"kefu-server/models"
 )
 
-type jinaRerankRequest struct {
+type openAICompatibleRerankRequest struct {
 	Model     string   `json:"model"`
 	Query     string   `json:"query"`
 	Documents []string `json:"documents"`
 	TopN      int      `json:"top_n,omitempty"`
 }
 
-type jinaRerankResponse struct {
+type openAICompatibleRerankResponse struct {
 	Results []struct {
 		Index          int     `json:"index"`
 		RelevanceScore float64 `json:"relevance_score"`
@@ -31,7 +31,7 @@ type jinaRerankResponse struct {
 	Model string `json:"model"`
 }
 
-type JinaProvider struct {
+type OpenAICompatibleProvider struct {
 	apiKey     string
 	baseURL    string
 	modelName  string
@@ -39,23 +39,32 @@ type JinaProvider struct {
 	client     *http.Client
 }
 
-func NewJinaProvider(cfg *models.APIModelConfig) (*JinaProvider, error) {
-	apiKey := strings.TrimSpace(cfg.APIKey)
-	baseURL := strings.TrimSpace(cfg.BaseURL)
-	if baseURL == "" {
-		baseURL = "https://api.jina.ai/v1"
+func normalizeOpenAICompatibleRerankBaseURL(provider, baseURL string) string {
+	baseURL = strings.TrimSpace(strings.TrimRight(baseURL, "/"))
+	if baseURL != "" {
+		return baseURL
 	}
-	baseURL = strings.TrimRight(baseURL, "/")
+	if strings.TrimSpace(provider) == "jina" {
+		return "https://api.jina.ai/v1"
+	}
+	return ""
+}
+
+func NewOpenAICompatibleProvider(cfg *models.APIModelConfig) (*OpenAICompatibleProvider, error) {
+	baseURL := normalizeOpenAICompatibleRerankBaseURL(cfg.Provider, cfg.BaseURL)
+	if baseURL == "" {
+		return nil, fmt.Errorf("openai-compatible rerank base_url is required")
+	}
 	timeout := cfg.TimeoutSec
 	if timeout <= 0 {
 		timeout = 60
 	}
 	modelName := strings.TrimSpace(cfg.ModelName)
 	if modelName == "" {
-		modelName = "jina-reranker-v2-base-multilingual"
+		modelName = "local-reranker"
 	}
-	return &JinaProvider{
-		apiKey:     apiKey,
+	return &OpenAICompatibleProvider{
+		apiKey:     strings.TrimSpace(cfg.APIKey),
 		baseURL:    baseURL,
 		modelName:  modelName,
 		timeoutSec: timeout,
@@ -65,7 +74,7 @@ func NewJinaProvider(cfg *models.APIModelConfig) (*JinaProvider, error) {
 	}, nil
 }
 
-func (p *JinaProvider) Rerank(query string, candidates []Candidate, topN int) ([]Candidate, error) {
+func (p *OpenAICompatibleProvider) Rerank(query string, candidates []Candidate, topN int) ([]Candidate, error) {
 	if len(candidates) == 0 {
 		return candidates, nil
 	}
@@ -78,7 +87,7 @@ func (p *JinaProvider) Rerank(query string, candidates []Candidate, topN int) ([
 		docs[i] = c.Content
 	}
 
-	reqBody := jinaRerankRequest{
+	reqBody := openAICompatibleRerankRequest{
 		Model:     p.modelName,
 		Query:     query,
 		Documents: docs,
@@ -86,7 +95,7 @@ func (p *JinaProvider) Rerank(query string, candidates []Candidate, topN int) ([
 	}
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("jina rerank marshal failed: %w", err)
+		return nil, fmt.Errorf("openai-compatible rerank marshal failed: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(p.timeoutSec)*time.Second)
@@ -94,7 +103,7 @@ func (p *JinaProvider) Rerank(query string, candidates []Candidate, topN int) ([
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/rerank", bytes.NewReader(jsonData))
 	if err != nil {
-		return nil, fmt.Errorf("jina rerank create request failed: %w", err)
+		return nil, fmt.Errorf("openai-compatible rerank create request failed: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if apiKey := strings.TrimSpace(p.apiKey); apiKey != "" {
@@ -103,22 +112,22 @@ func (p *JinaProvider) Rerank(query string, candidates []Candidate, topN int) ([
 
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("jina rerank request failed: %w", err)
+		return nil, fmt.Errorf("openai-compatible rerank request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("jina rerank read response failed: %w", err)
+		return nil, fmt.Errorf("openai-compatible rerank read response failed: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("jina rerank api error: status=%d body=%s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("openai-compatible rerank api error: status=%d body=%s", resp.StatusCode, string(body))
 	}
 
-	var rerankResp jinaRerankResponse
+	var rerankResp openAICompatibleRerankResponse
 	if err := json.Unmarshal(body, &rerankResp); err != nil {
-		return nil, fmt.Errorf("jina rerank unmarshal failed: %w", err)
+		return nil, fmt.Errorf("openai-compatible rerank unmarshal failed: %w", err)
 	}
 
 	results := make([]Candidate, 0, len(rerankResp.Results))

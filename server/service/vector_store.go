@@ -112,14 +112,10 @@ func (s *SQLiteVecStore) initSchema(ctx context.Context) error {
 		}
 	}
 
-	if _, err := sqlDB.ExecContext(ctx, `CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_vec_index USING vec0(
-		vector_id TEXT PRIMARY KEY,
-		embedding float[384]
-	) WITH (
-		index_type='hnsw',
-		M=16,
-		ef_construction=200
-	)`); err != nil {
+		if _, err := sqlDB.ExecContext(ctx, `CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_vec_index USING vec0(
+			vector_id TEXT PRIMARY KEY,
+			embedding float[384]
+		)`); err != nil {
 		return fmt.Errorf("create vec0 table failed: %w", err)
 	}
 
@@ -523,10 +519,6 @@ func (s *SQLiteVecStore) ensureVecTable(ctx context.Context, dims int) (vecTable
 	createVec := fmt.Sprintf(`CREATE VIRTUAL TABLE IF NOT EXISTS %s USING vec0(
 		vector_id TEXT PRIMARY KEY,
 		embedding float[%d]
-	) WITH (
-		index_type='hnsw',
-		M=16,
-		ef_construction=200
 	)`, vecTable, dims)
 	if _, err := sqlDB.ExecContext(ctx, createVec); err != nil {
 		return "", "", fmt.Errorf("create vec table %s failed: %w", vecTable, err)

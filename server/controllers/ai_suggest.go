@@ -147,13 +147,19 @@ func (ac *AISuggestController) Suggest(c *gin.Context) {
 	suggestion := ""
 	chunkCount := 0
 
-	hits, searchErr := searchKnowledgeHitsByApp(c.Request.Context(), appID, visitorText, 5)
+	searchCtx, cancel := knowledgeSearchContext()
+	defer cancel()
+
+	hits, searchErr := searchKnowledgeHitsByApp(searchCtx, appID, visitorText, 5)
 	if searchErr != nil {
 		logger.Errorf("ai suggest vector search failed app_id=%s err=%v", appID, searchErr)
 	}
 
 	if len(hits) > 0 {
-		answer, _, answerErr := service.AnswerWithEnabledAPIModel(c.Request.Context(), visitorText, hits)
+		qaCtx, qaCancel := knowledgeQAContext()
+		defer qaCancel()
+
+		answer, _, answerErr := service.AnswerWithEnabledAPIModel(qaCtx, visitorText, hits)
 		if answerErr == nil && answer != nil {
 			suggestion = strings.TrimSpace(answer.Answer)
 			source = aiSuggestSourceVectorEino

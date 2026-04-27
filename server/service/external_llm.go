@@ -139,9 +139,6 @@ func NewExternalLLMClient(cfg models.APIModelConfig) (*ExternalLLMClient, error)
 	if cfg.ModelName == "" {
 		return nil, fmt.Errorf("api model name is empty")
 	}
-	if cfg.Provider != "ollama" && cfg.APIKey == "" {
-		return nil, fmt.Errorf("api key is empty")
-	}
 	if cfg.BaseURL == "" {
 		return nil, fmt.Errorf("api base_url is empty")
 	}
@@ -241,7 +238,9 @@ func (c *ExternalLLMClient) Generate(ctx context.Context, messages []ExternalCha
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(c.cfg.APIKey))
+	if apiKey := strings.TrimSpace(c.cfg.APIKey); apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -314,7 +313,9 @@ func (c *ExternalLLMClient) GenerateStream(
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(c.cfg.APIKey))
+	if apiKey := strings.TrimSpace(c.cfg.APIKey); apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
 	req.Header.Set("Accept", "text/event-stream")
 
 	resp, err := c.client.Do(req)
@@ -408,9 +409,6 @@ func GetEnabledAPIModelConfigByType(modelType string) (models.APIModelConfig, er
 	if item.Provider == "" || item.ModelName == "" {
 		return models.APIModelConfig{}, fmt.Errorf("enabled api model invalid")
 	}
-	if item.Provider != "ollama" && item.APIKey == "" {
-		return models.APIModelConfig{}, fmt.Errorf("enabled api model invalid")
-	}
 	item.APIKey = utils.DecryptAPIKey(item.APIKey)
 	return item, nil
 }
@@ -460,9 +458,9 @@ func RerankHits(ctx context.Context, query string, hits []VectorHit, topN int) [
 }
 
 const (
-	maxRAGSnippetChars  = 320
-	maxRAGTotalCtxChars = 1800
-	maxRAGSnippets      = 6
+	maxRAGSnippetChars  = 220
+	maxRAGTotalCtxChars = 1000
+	maxRAGSnippets      = 4
 )
 
 func clampRunes(raw string, limit int) string {
@@ -481,10 +479,8 @@ func buildRAGPrompt(query string, hits []VectorHit) string {
 	parts = append(parts,
 		"你是客服机器人助手。",
 		"仅基于提供的知识片段作答，不要编造事实。",
-		"回答结构：先给1句结论，再给3-6条要点。",
-		"回复长度建议 80-220 字；复杂问题可放宽，但避免冗长。",
-		"若证据不足，请明确说明信息不足，并引导用户补充关键信息或转人工。",
-		"不要输出与问题无关的内容。",
+		"先给结论，再给最多 4 条关键要点。",
+		"尽量简洁，避免重复铺垫；证据不足就直接说明信息不足。",
 		"",
 		"知识片段：",
 	)

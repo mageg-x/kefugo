@@ -54,16 +54,17 @@
     <section class="kb-panel" v-loading="contentLoading">
       <template v-if="activeTab === 'documents'">
         <div class="kb-toolbar">
-          <el-button plain class="toolbar-btn" :disabled="!canUploadDocs" :loading="kbBackendChecking" @click="pickFiles">{{ t("pageKnowledge.btn.uploadDocs") }}</el-button>
+          <el-button plain class="toolbar-btn" :disabled="!canUploadDocs" :loading="kbBackendChecking || uploadingDocuments" @click="pickFiles">{{ t("pageKnowledge.btn.uploadDocs") }}</el-button>
           <el-tag size="small" :type="kbBackendReady ? 'success' : (kbBackendDegraded ? 'warning' : 'danger')">
             {{ kbBackendReady ? t("pageKnowledge.status.vectorReady") : t("pageKnowledge.status.vectorNotReady") }}
           </el-tag>
+          <span v-if="uploadingDocuments" class="model-hint">{{ uploadProgressText }}</span>
           <input
             ref="fileInputRef"
             type="file"
             multiple
             class="hidden-input"
-            accept=".txt,.md,.csv,.json,.log,.html,.htm"
+            accept=".txt,.md,.pdf,.docx,.csv,.tsv,.xlsx"
             @change="onFilesSelected"
           />
           <el-input
@@ -226,8 +227,8 @@
         </div>
 
         <div class="qa-input-row">
-          <el-input v-model="qaInput" :placeholder="t('pageKnowledge.placeholder.qaInput')" @keyup.enter="runQATest" />
-          <el-button type="primary" @click="runQATest">{{ t("action.send") }}</el-button>
+          <el-input v-model="qaInput" :disabled="qaStreaming" :placeholder="t('pageKnowledge.placeholder.qaInput')" @keyup.enter="runQATest" />
+          <el-button type="primary" :loading="qaStreaming" @click="runQATest">{{ t("action.send") }}</el-button>
           <el-button text @click="clearQAHistory">{{ t("action.clear") }}</el-button>
         </div>
       </template>
@@ -270,14 +271,14 @@
         </button>
       </div>
       <div class="model-status-cards">
-        <div v-for="mt in modelTypeTabs" :key="mt.key + '-status'" class="model-status-card" :class="{ 'has-default': getDefaultModel(mt.key) }">
+        <div v-for="mt in modelTypeTabs" :key="mt.key + '-status'" class="model-status-card" :class="{ 'has-default': getActiveModelLabel(mt.key) }">
           <span class="model-status-icon">{{ mt.icon }}</span>
           <div class="model-status-info">
             <div class="model-status-label">{{ t(mt.labelKey) }}</div>
-            <div class="model-status-value">{{ getDefaultModel(mt.key) || t("pageKnowledge.status.modelDisabled") }}</div>
+            <div class="model-status-value">{{ getActiveModelLabel(mt.key) || t("pageKnowledge.status.modelDisabled") }}</div>
           </div>
-          <el-tag size="small" :type="getDefaultModel(mt.key) ? 'success' : 'info'">
-            {{ getDefaultModel(mt.key) ? t("status.enabled") : t("status.disabled") }}
+          <el-tag size="small" :type="getActiveModelLabel(mt.key) ? 'success' : 'info'">
+            {{ getActiveModelLabel(mt.key) ? t("status.enabled") : t("status.disabled") }}
           </el-tag>
         </div>
       </div>
@@ -384,7 +385,7 @@
         <el-form-item v-if="apiModelForm.model_type === 'rerank'" label="TopN">
           <el-input-number v-model="apiModelForm.top_n" :min="1" :max="50" />
         </el-form-item>
-        <el-form-item v-if="apiModelForm.model_type === 'chat'" :label="t('pageKnowledge.table.timeoutSec')">
+        <el-form-item :label="t('pageKnowledge.table.timeoutSec')">
           <el-input-number v-model="apiModelForm.timeout_sec" :min="10" :max="600" />
         </el-form-item>
         <el-form-item v-if="apiModelForm.model_type === 'chat'" :label="t('pageKnowledge.table.temperature')">
@@ -409,10 +410,11 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import api from "@/script/api";
 import { t } from "@/script/i18n-text";
+import { useStore } from "@/script/store";
 
 const activeTab = ref("documents");
 const contentLoading = ref(false);
@@ -430,6 +432,9 @@ const appOptions = ref([]);
 const documents = ref([]);
 const documentKeyword = ref("");
 const fileInputRef = ref(null);
+const uploadingDocuments = ref(false);
+const uploadDoneCount = ref(0);
+const uploadTotalCount = ref(0);
 
 const chunks = ref([]);
 const chunkKeyword = ref("");
@@ -447,6 +452,9 @@ const kbBackendChecking = ref(false);
 
 const qaInput = ref("");
 const qaHistory = ref([]);
+const qaStreaming = ref(false);
+const store = useStore();
+let qaAbortController = null;
 
 const newBaseVisible = ref(false);
 const creatingBase = ref(false);
@@ -492,8 +500,16 @@ const filteredAPIModels = computed(() => {
   return (apiModels.value || []).filter((m) => (m.model_type || "chat") === activeModelType.value);
 });
 
-function getDefaultModel(modelType) {
-  const m = (apiModels.value || []).find((m) => (m.model_type || "chat") === modelType && m.is_default && m.status === 1);
+function getEnabledModel(modelType) {
+  const items = (apiModels.value || []).filter(
+    (m) => (m.model_type || "chat") === modelType && Number(m.status) === 1,
+  );
+  if (!items.length) return null;
+  return items.find((m) => Boolean(m.is_default)) || items[0];
+}
+
+function getActiveModelLabel(modelType) {
+  const m = getEnabledModel(modelType);
   return m ? `${m.provider}/${m.model_name}` : "";
 }
 
@@ -508,7 +524,7 @@ const chunkSummary = computed(() => {
 });
 
 const activeAPIModel = computed(() => {
-  return (apiModels.value || []).find((item) => Number(item.status) === 1) || null;
+  return getEnabledModel("chat");
 });
 
 const activeAPIModelHint = computed(() => {
@@ -517,7 +533,32 @@ const activeAPIModelHint = computed(() => {
   return `${item.provider} · ${item.model_name}`;
 });
 
+function getModelTimeoutSec(modelType, fallbackSec = 60) {
+  const item = getEnabledModel(modelType);
+  const timeout = Number(item?.timeout_sec || 0);
+  if (Number.isFinite(timeout) && timeout > 0) {
+    return timeout;
+  }
+  return fallbackSec;
+}
+
+function getRetrieveTimeoutSec() {
+  const embeddingTimeout = getModelTimeoutSec("embedding", 60);
+  const rerankModel = getEnabledModel("rerank");
+  const rerankTimeout = rerankModel ? getModelTimeoutSec("rerank", 30) + 10 : 0;
+  return Math.min(600, Math.max(45, embeddingTimeout + rerankTimeout + 20));
+}
+
+function getQATimeoutSec() {
+  const chatTimeout = getModelTimeoutSec("chat", 120);
+  return Math.min(900, Math.max(90, getRetrieveTimeoutSec() + chatTimeout + 20));
+}
+
 const canUploadDocs = computed(() => Boolean(currentBaseID.value) && (kbBackendReady.value || kbBackendDegraded.value) && !kbBackendChecking.value);
+const uploadProgressText = computed(() => {
+  if (!uploadingDocuments.value || uploadTotalCount.value <= 0) return "";
+  return `${uploadDoneCount.value} / ${uploadTotalCount.value}`;
+});
 
 function formatDateTime(value) {
   if (!value) return "-";
@@ -769,7 +810,7 @@ async function refreshKnowledgeBackendHealth(showToast = false) {
 
 async function loadDocuments(silent = false) {
   if (!ensureBaseID()) return;
-  contentLoading.value = true;
+  if (!silent) contentLoading.value = true;
   try {
     const resp = await api.listKnowledgeDocuments(currentBaseID.value, {
       keyword: documentKeyword.value || undefined,
@@ -780,7 +821,7 @@ async function loadDocuments(silent = false) {
       ElMessage.error(err.message || t("pageKnowledge.toast.loadDocumentFailed"));
     }
   } finally {
-    contentLoading.value = false;
+    if (!silent) contentLoading.value = false;
   }
 }
 
@@ -811,18 +852,34 @@ async function onFilesSelected(event) {
       return;
     }
   }
-  contentLoading.value = true;
+  uploadingDocuments.value = true;
+  uploadDoneCount.value = 0;
+  uploadTotalCount.value = files.length;
   try {
+    const failed = [];
     for (const file of files) {
-      await api.uploadKnowledgeDocument(currentBaseID.value, file);
+      try {
+        await api.uploadKnowledgeDocument(currentBaseID.value, file);
+        uploadDoneCount.value += 1;
+        await loadDocuments(true);
+      } catch (err) {
+        failed.push({ file, err });
+      }
     }
-    ElMessage.success(t("pageKnowledge.toast.uploadSuccess"));
-    await loadDocuments();
-    await loadChunks();
+    if (!failed.length) {
+      ElMessage.success(t("pageKnowledge.toast.uploadSuccess"));
+    } else if (uploadDoneCount.value > 0) {
+      ElMessage.warning(`${uploadDoneCount.value}/${files.length} uploaded, ${failed.length} failed`);
+    } else {
+      throw failed[0].err;
+    }
+    await loadChunks(true);
   } catch (err) {
     ElMessage.error(err.message || t("pageKnowledge.toast.uploadFailed"));
   } finally {
-    contentLoading.value = false;
+    uploadingDocuments.value = false;
+    uploadDoneCount.value = 0;
+    uploadTotalCount.value = 0;
     if (event?.target) event.target.value = "";
   }
 }
@@ -854,7 +911,7 @@ async function removeDocument(doc) {
 
 async function loadChunks(silent = false) {
   if (!ensureBaseID()) return;
-  contentLoading.value = true;
+  if (!silent) contentLoading.value = true;
   try {
     const resp = await api.listKnowledgeChunks(currentBaseID.value, {
       keyword: chunkKeyword.value || undefined,
@@ -866,7 +923,7 @@ async function loadChunks(silent = false) {
       ElMessage.error(err.message || t("pageKnowledge.toast.loadChunkFailed"));
     }
   } finally {
-    contentLoading.value = false;
+    if (!silent) contentLoading.value = false;
   }
 }
 
@@ -920,7 +977,8 @@ async function runRetrieveTest() {
     const resp = await api.knowledgeRetrieveTest(
       currentBaseID.value,
       retrieveQuery.value.trim(),
-      retrieveTopK.value
+      retrieveTopK.value,
+      getRetrieveTimeoutSec(),
     );
     retrieveResults.value = resp?.data?.data?.results || [];
   } catch (err) {
@@ -930,8 +988,47 @@ async function runRetrieveTest() {
   }
 }
 
+function cancelQATestStream() {
+  if (qaAbortController) {
+    qaAbortController.abort();
+    qaAbortController = null;
+  }
+  qaStreaming.value = false;
+}
+
+function parseSSEChunk(chunk) {
+  const blocks = chunk.split("\n\n");
+  const events = [];
+  for (const block of blocks) {
+    const text = String(block || "").trim();
+    if (!text) continue;
+    let event = "message";
+    const dataLines = [];
+    for (const line of text.split("\n")) {
+      if (line.startsWith("event:")) {
+        event = line.slice(6).trim() || "message";
+        continue;
+      }
+      if (line.startsWith("data:")) {
+        dataLines.push(line.slice(5).trim());
+      }
+    }
+    if (!dataLines.length) continue;
+    let payload = {};
+    const dataText = dataLines.join("\n");
+    try {
+      payload = JSON.parse(dataText);
+    } catch {
+      payload = { message: dataText };
+    }
+    events.push({ event, payload });
+  }
+  return events;
+}
+
 async function runQATest() {
   if (!ensureBaseID()) return;
+  if (qaStreaming.value) return;
   const query = qaInput.value.trim();
   if (!query) {
     ElMessage.warning(t("pageKnowledge.toast.inputQuestion"));
@@ -941,37 +1038,128 @@ async function runQATest() {
     ElMessage.warning(t("pageKnowledge.toast.enableModelFirst"));
     return;
   }
-  contentLoading.value = true;
+  qaStreaming.value = true;
+  const historyItem = reactive({
+    question: query,
+    answer: "正在生成...",
+    sources: [],
+    chunks: [],
+    model_provider: "",
+    model_name: "",
+    streaming: true,
+  });
+  qaHistory.value.push(historyItem);
+  qaInput.value = "";
+  const timeoutMs = Math.max(15000, Math.min(900000, getQATimeoutSec() * 1000 + 10000));
+  const controller = new AbortController();
+  qaAbortController = controller;
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const resp = await api.knowledgeQATest(
-      currentBaseID.value,
-      query,
-      retrieveTopK.value,
-      Number(activeAPIModel.value?.timeout_sec || 120),
-    );
-    const data = resp?.data?.data || {};
-    qaHistory.value.push({
-      question: query,
-      answer: data.answer || "",
-      sources: data.sources || [],
-      chunks: data.chunks || [],
-      model_provider: data.model_provider || "",
-      model_name: data.model_name || "",
+    const resp = await fetch(`${api.baseURL}/knowledge-bases/${currentBaseID.value}/qa-test-stream`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+        ...(store.token ? { Authorization: `Bearer ${store.token}` } : {}),
+      },
+      body: JSON.stringify({
+        query,
+        top_k: retrieveTopK.value,
+      }),
+      signal: controller.signal,
     });
-    qaInput.value = "";
+    if (!resp.ok) {
+      let message = t("pageKnowledge.toast.qaFailed");
+      try {
+        const errPayload = await resp.json();
+        message = String(errPayload?.msg || errPayload?.message || message);
+      } catch {
+        const errText = await resp.text();
+        if (String(errText || "").trim()) {
+          message = String(errText).trim();
+        }
+      }
+      throw new Error(message);
+    }
+    if (!resp.body) {
+      throw new Error(t("pageKnowledge.toast.qaFailed"));
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+    let finished = false;
+    while (!finished) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() || "";
+      for (const chunk of parts) {
+        const events = parseSSEChunk(chunk);
+        for (const item of events) {
+          if (item.event === "delta") {
+            historyItem.answer = String(item.payload?.answer || historyItem.answer || "");
+            continue;
+          }
+          if (item.event === "final") {
+            historyItem.answer = String(item.payload?.answer || historyItem.answer || "");
+            historyItem.sources = item.payload?.sources || [];
+            historyItem.chunks = item.payload?.chunks || [];
+            historyItem.model_provider = String(item.payload?.model_provider || "");
+            historyItem.model_name = String(item.payload?.model_name || "");
+            historyItem.streaming = false;
+            finished = true;
+            break;
+          }
+          if (item.event === "error") {
+            throw new Error(String(item.payload?.message || t("pageKnowledge.toast.qaFailed")));
+          }
+        }
+      }
+    }
+
+    if (!finished && buffer.trim()) {
+      const tailEvents = parseSSEChunk(buffer);
+      for (const item of tailEvents) {
+        if (item.event === "final") {
+          historyItem.answer = String(item.payload?.answer || historyItem.answer || "");
+          historyItem.sources = item.payload?.sources || [];
+          historyItem.chunks = item.payload?.chunks || [];
+          historyItem.model_provider = String(item.payload?.model_provider || "");
+          historyItem.model_name = String(item.payload?.model_name || "");
+          historyItem.streaming = false;
+          finished = true;
+          break;
+        }
+      }
+    }
+    if (!finished) {
+      historyItem.streaming = false;
+      if (!String(historyItem.answer || "").trim()) {
+        historyItem.answer = t("pageKnowledge.toast.qaFailed");
+      }
+    }
   } catch (err) {
+    qaHistory.value = qaHistory.value.filter((item) => item !== historyItem);
     const message = String(err?.message || "");
-    if (message.includes("timeout")) {
+    if (err?.name === "AbortError" || message.includes("timeout")) {
       ElMessage.error(t("pageKnowledge.toast.qaTimeout"));
     } else {
       ElMessage.error(message || t("pageKnowledge.toast.qaFailed"));
     }
   } finally {
-    contentLoading.value = false;
+    window.clearTimeout(timer);
+    historyItem.streaming = false;
+    if (qaAbortController === controller) {
+      qaAbortController = null;
+    }
+    qaStreaming.value = false;
   }
 }
 
 async function regenerate(item) {
+  if (qaStreaming.value) return;
   qaInput.value = item.question || "";
   await runQATest();
 }
@@ -992,10 +1180,12 @@ async function feedback(item, helpful) {
 }
 
 function clearQAHistory() {
+  cancelQATestStream();
   qaHistory.value = [];
 }
 
 function onBaseChanged() {
+  cancelQATestStream();
   if (activeTab.value === "documents") loadDocuments();
   else if (activeTab.value === "chunks") loadChunks();
   else if (activeTab.value === "retrieve") retrieveResults.value = [];
@@ -1021,7 +1211,7 @@ function openAPIModelForm(item = null) {
       id: 0,
       model_type: activeModelType.value,
       name: "",
-      provider: activeModelType.value === "rerank" ? "cohere" : activeModelType.value === "embedding" ? "ollama" : "openai",
+      provider: activeModelType.value === "embedding" ? "ollama" : "openai",
       api_key: "",
       api_key_mask: "",
       base_url: activeModelType.value === "embedding" ? ollamaDefaultURL : "",
@@ -1102,10 +1292,6 @@ async function saveAPIModel() {
       status: Number(apiModelForm.value.status || 0) === 1 ? 1 : 0,
     };
     if (!payload.provider || !payload.model_name) {
-      ElMessage.warning(t("pageKnowledge.toast.modelRequiredFields"));
-      return;
-    }
-    if (payload.provider !== "ollama" && !payload.api_key) {
       ElMessage.warning(t("pageKnowledge.toast.modelRequiredFields"));
       return;
     }
@@ -1229,6 +1415,11 @@ onMounted(async () => {
   if (currentBaseID.value) {
     await Promise.all([loadDocuments(), loadChunks()]);
   }
+});
+
+onBeforeUnmount(() => {
+  cancelQATestStream();
+  stopRebuildPoll();
 });
 
 </script>

@@ -22,8 +22,8 @@ func NewProvider(cfg *models.APIModelConfig) (Provider, error) {
 		return NewOllamaProvider(cfg)
 	case "cohere":
 		return NewCohereProvider(cfg)
-	case "jina":
-		return NewJinaProvider(cfg)
+	case "openai", "qwen", "deepseek", "zhipu", "jina":
+		return NewOpenAICompatibleProvider(cfg)
 	default:
 		return nil, fmt.Errorf("unsupported rerank provider: %s", cfg.Provider)
 	}

@@ -285,7 +285,7 @@ func normalizeUploadDir() string {
 func allowKnowledgeFileExt(name string) bool {
 	ext := strings.ToLower(strings.TrimSpace(filepath.Ext(name)))
 	switch ext {
-	case ".txt", ".md", ".csv", ".json", ".log", ".html", ".htm":
+	case ".txt", ".md", ".pdf", ".docx", ".csv", ".tsv", ".xlsx":
 		return true
 	default:
 		return false
@@ -364,14 +364,16 @@ func (kc *KnowledgeWorkspaceController) UploadDocument(c *gin.Context) {
 	}
 
 	vdb := kc.buildVectorStore()
-	if err := vdb.EnsureCollection(c.Request.Context(), base.Collection); err != nil {
+	indexCtx, cancel := knowledgeIndexContext()
+	defer cancel()
+	if err := vdb.EnsureCollection(indexCtx, base.Collection); err != nil {
 		doc.Status = "failed"
 		doc.ErrorMessage = err.Error()
 		_ = store.DB.Save(&doc).Error
 		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeKnowledgeVectorCollectionFailed)
 		return
 	}
-	_, rebuildErr := service.RebuildChunksFromRawContent(c.Request.Context(), vdb, &doc)
+	_, rebuildErr := service.RebuildChunksFromRawContent(indexCtx, vdb, &doc)
 	if rebuildErr != nil {
 		doc.Status = "failed"
 		doc.ErrorMessage = rebuildErr.Error()
@@ -403,11 +405,13 @@ func (kc *KnowledgeWorkspaceController) ReindexDocument(c *gin.Context) {
 		return
 	}
 	vdb := kc.buildVectorStore()
-	if err := vdb.EnsureCollection(c.Request.Context(), base.Collection); err != nil {
+	indexCtx, cancel := knowledgeIndexContext()
+	defer cancel()
+	if err := vdb.EnsureCollection(indexCtx, base.Collection); err != nil {
 		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeKnowledgeVectorCollectionFailed)
 		return
 	}
-	_, err := service.RebuildChunksFromRawContent(c.Request.Context(), vdb, &doc)
+	_, err := service.RebuildChunksFromRawContent(indexCtx, vdb, &doc)
 	if err != nil {
 		logger.Errorf("knowledge document reindex failed doc_id=%d err=%v", doc.ID, err)
 		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeKnowledgeDocumentReindexFailed)
@@ -545,7 +549,9 @@ func (kc *KnowledgeWorkspaceController) UpdateChunk(c *gin.Context) {
 		"document_id": chunk.DocumentID,
 		"chunk_seq":   chunk.ChunkSeq,
 	}
-	if err := vdb.InsertText(c.Request.Context(), base.Collection, chunk.VectorID, content, meta); err != nil {
+	indexCtx, cancel := knowledgeIndexContext()
+	defer cancel()
+	if err := vdb.InsertText(indexCtx, base.Collection, chunk.VectorID, content, meta); err != nil {
 		logger.Errorf("knowledge chunk update vector failed chunk_id=%d err=%v", chunk.ID, err)
 		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeKnowledgeChunkUpdateFailed)
 		return
@@ -600,6 +606,18 @@ func (kc *KnowledgeWorkspaceController) searchBaseChunks(ctx context.Context, ba
 	return service.RerankHits(ctx, query, hits, topK), nil
 }
 
+func writeSSEEvent(c *gin.Context, event string, payload interface{}) error {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(c.Writer, "event: %s\ndata: %s\n\n", strings.TrimSpace(event), raw); err != nil {
+		return err
+	}
+	c.Writer.Flush()
+	return nil
+}
+
 // RetrieveTest 检索测试接口。
 func (kc *KnowledgeWorkspaceController) RetrieveTest(c *gin.Context) {
 	base, ok := kc.getBaseByID(c)
@@ -619,7 +637,10 @@ func (kc *KnowledgeWorkspaceController) RetrieveTest(c *gin.Context) {
 		response.ResponseError(c, http.StatusBadRequest, response.ErrCodeKnowledgeRetrieveInvalid)
 		return
 	}
-	hits, err := kc.searchBaseChunks(c.Request.Context(), base, query, req.TopK)
+	searchCtx, cancel := knowledgeSearchContext()
+	defer cancel()
+
+	hits, err := kc.searchBaseChunks(searchCtx, base, query, req.TopK)
 	if err != nil {
 		logger.Errorf("knowledge retrieve failed base_id=%d err=%v", base.ID, err)
 		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeKnowledgeRetrieveFailed)
@@ -710,14 +731,17 @@ func (kc *KnowledgeWorkspaceController) QATest(c *gin.Context) {
 		response.ResponseError(c, http.StatusBadRequest, response.ErrCodeKnowledgeQAInvalid)
 		return
 	}
-	hits, err := kc.searchBaseChunks(c.Request.Context(), base, query, req.TopK)
+	qaCtx, cancel := knowledgeQAContextWithParent(c.Request.Context())
+	defer cancel()
+
+	hits, err := kc.searchBaseChunks(qaCtx, base, query, req.TopK)
 	if err != nil {
 		logger.Errorf("knowledge qa retrieve failed base_id=%d err=%v", base.ID, err)
 		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeKnowledgeQAFailed)
 		return
 	}
 
-	answer, modelCfg, err := service.AnswerWithEnabledAPIModel(c.Request.Context(), query, hits)
+	answer, modelCfg, err := service.AnswerWithEnabledAPIModel(qaCtx, query, hits)
 	if err != nil {
 		if errors.Is(err, service.ErrNoEnabledAPIModel) {
 			response.ResponseErrorWithMsg(c, http.StatusBadRequest, response.ErrCodeKnowledgeModelProfileNotFound, "no enabled api model, please configure one first")
@@ -728,6 +752,93 @@ func (kc *KnowledgeWorkspaceController) QATest(c *gin.Context) {
 		return
 	}
 	response.ResponseSuccess(c, gin.H{
+		"query":          query,
+		"answer":         answer.Answer,
+		"sources":        answer.Sources,
+		"chunks":         answer.Chunks,
+		"model_provider": modelCfg.Provider,
+		"model_name":     modelCfg.ModelName,
+		"model_id":       modelCfg.ID,
+	})
+}
+
+// QATestStream 问答测试流式接口。
+func (kc *KnowledgeWorkspaceController) QATestStream(c *gin.Context) {
+	base, ok := kc.getBaseByID(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		Query string `json:"query" binding:"required"`
+		TopK  int    `json:"top_k"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ResponseError(c, http.StatusBadRequest, response.ErrCodeKnowledgeQAInvalid)
+		return
+	}
+	query := strings.TrimSpace(req.Query)
+	if query == "" {
+		response.ResponseError(c, http.StatusBadRequest, response.ErrCodeKnowledgeQAInvalid)
+		return
+	}
+	qaCtx, cancel := knowledgeQAContextWithParent(c.Request.Context())
+	defer cancel()
+
+	hits, err := kc.searchBaseChunks(qaCtx, base, query, req.TopK)
+	if err != nil {
+		logger.Errorf("knowledge qa stream retrieve failed base_id=%d err=%v", base.ID, err)
+		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeKnowledgeQAFailed)
+		return
+	}
+
+	c.Header("Content-Type", "text/event-stream; charset=utf-8")
+	c.Header("Cache-Control", "no-cache, no-transform")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+	c.Status(http.StatusOK)
+	c.Writer.Flush()
+
+	if err := writeSSEEvent(c, "started", gin.H{
+		"query":     query,
+		"hit_count": len(hits),
+	}); err != nil {
+		logger.Warnf("knowledge qa stream started write failed base_id=%d err=%v", base.ID, err)
+		return
+	}
+
+	streamWriteErr := error(nil)
+	answer, modelCfg, err := service.AnswerWithEnabledAPIModelStreamWithSystemPrompt(qaCtx, query, hits, "", func(current string) {
+		if streamWriteErr != nil {
+			return
+		}
+		if err := writeSSEEvent(c, "delta", gin.H{
+			"answer": current,
+		}); err != nil {
+			streamWriteErr = err
+			cancel()
+		}
+	})
+	if streamWriteErr != nil {
+		logger.Warnf("knowledge qa stream interrupted base_id=%d err=%v", base.ID, streamWriteErr)
+		return
+	}
+	if err != nil {
+		if errors.Is(err, service.ErrNoEnabledAPIModel) {
+			_ = writeSSEEvent(c, "error", gin.H{
+				"code":    response.ErrCodeKnowledgeModelProfileNotFound,
+				"message": "no enabled api model, please configure one first",
+			})
+			return
+		}
+		logger.Errorf("knowledge qa stream model infer failed base_id=%d provider=%s model=%s err=%v", base.ID, modelCfg.Provider, modelCfg.ModelName, err)
+		_ = writeSSEEvent(c, "error", gin.H{
+			"code":    response.ErrCodeKnowledgeModelInferFailed,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	_ = writeSSEEvent(c, "final", gin.H{
 		"query":          query,
 		"answer":         answer.Answer,
 		"sources":        answer.Sources,
