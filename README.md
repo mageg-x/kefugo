@@ -57,30 +57,120 @@ CGO_ENABLED=0 go run .
 2. 媒体录音权限（麦克风）
 3. 文件选择与上传
 
-## 全屏 H5 接入（App / WebView）
-用于 App 打开一个全屏客服页（非浮窗）。
+## SDK 接入
 
-推荐地址（由后端统一托管静态资源）：
+### 访客 ID 规则
+- `userId` / `visitorId` 由业务方显式传入时，SDK 会优先使用该值。
+- 未传时，SDK 会在当前浏览器本地自动生成匿名访客 ID，并持久化到 `localStorage + cookie`。
+- 因此同一台机器上的同一浏览器、同一站点域名下，刷新页面后仍会复用同一个匿名访客 ID，不会每次刷新生成一个新会话。
+- 业务用户统一规范为 `u_` 前缀，如 `u_10086`。
+- SDK 匿名访客统一规范为 `v_` 前缀，如 `v_xxx`。
+- 如果业务方传入 `10086`，SDK 会自动规范为 `u_10086`。
+- 建议业务侧只传干净 ID：`[A-Za-z0-9_-]`。
+
+### 网页浮窗接入 `widget.min.js`
+
+#### 1. 匿名访客模式
+适合官网、落地页、无需登录即可咨询的场景。
+
+```html
+<script
+  type="module"
+  src="http://<server-host>:5300/sdk/widget.min.js"
+  data-kefu-appid="your-app-id"
+  data-kefu-api-base-url="http://<server-host>:5300"
+></script>
+```
+
+说明：
+- 不传 `data-kefu-user-id` 时，SDK 自动生成并持久化匿名访客 ID。
+- 同一浏览器刷新页面后仍是同一个访客。
+
+#### 2. 固定业务用户模式
+适合你已经有登录态，且希望客服会话直接绑定业务用户账号。
+
+```html
+<script
+  type="module"
+  src="http://<server-host>:5300/sdk/widget.min.js"
+  data-kefu-appid="your-app-id"
+  data-kefu-api-base-url="http://<server-host>:5300"
+  data-kefu-user-id="u_10086"
+></script>
+```
+
+也支持：
+- `data-kefu-visitor-id="u_10086"`
+
+#### 3. 动态获取业务用户 ID 后再初始化
+适合用户信息需要异步请求、从 Token 解码、或等待宿主页面登录完成后再拿到的场景。
+
+```html
+<script
+  type="module"
+  src="http://<server-host>:5300/sdk/widget.min.js"
+  data-kefu-sdk
+></script>
+
+<script type="module">
+  const currentUser = await fetchCurrentUser();
+
+  window.KefuChat.init({
+    appId: "your-app-id",
+    userId: currentUser.id, // 也可传 visitorId
+    apiBaseUrl: "http://<server-host>:5300",
+  });
+</script>
+```
+
+说明：
+- 这种模式下，不要同时再配 `data-kefu-appid` 自动初始化。
+- 正确顺序是：先拿到业务用户 ID，再执行 `window.KefuChat.init(...)`。
+- 否则会先以匿名访客建会话，后面再切业务用户，造成会话分裂。
+
+### 全屏聊天页接入 `chat.html`
+适合 App、H5、WebView、站内单独客服页。
+
+#### 1. 直接拼接 URL
+
+推荐地址：
 ```text
 http://<server-host>:5300/sdk/chat.html?appId=demo_kefu_app&userId=u_10086
 ```
 
-可选本地调试地址（Vite/Live Server）：
+匿名访客模式：
 ```text
-http://127.0.0.1:5500/web-sdk/chat.html?appId=demo_kefu_app&userId=u_10086
+http://<server-host>:5300/sdk/chat.html?appId=demo_kefu_app
+```
+
+本地调试地址：
+```text
+http://127.0.0.1:5500/web-sdk/chat.html?appId=demo_kefu_app&apiBaseUrl=http://127.0.0.1:5300
 ```
 
 参数说明：
 - `appId`：必填，客服应用 ID。
-- `userId`：选填。App 若有自有用户体系，建议传入稳定账号 ID。
-- `apiBaseUrl`：选填，默认同源；跨域调试时建议显式传入，如 `http://127.0.0.1:5300`。
-- `wsUrl`：选填，默认根据 `apiBaseUrl` 自动推导 `ws/wss` 地址。
+- `userId`：选填，业务用户 ID。
+- `visitorId`：选填，`userId` 的别名。
+- `apiBaseUrl`：选填，默认同源；跨域调试时建议显式传入。
+- `wsUrl`：选填，默认根据 `apiBaseUrl` 自动推导。
 
-访客 ID 约定（已实现）：
-- App 自有用户：统一使用 `u_` 前缀（如 `u_10086`）。
-- SDK 自动访客：统一使用 `v_` 前缀（如 `v_xxx`）。
-- `userId` 传 `10086` 也可，SDK 会自动规范为 `u_10086`。
-- 请避免 `:` 等特殊字符；SDK 会做清洗，但建议业务侧直接传干净 ID（`[A-Za-z0-9_-]`）。
+说明：
+- `chat.html` 未传 `userId/visitorId` 时，也会自动复用浏览器本地匿名访客 ID。
+- 如果 App / H5 已有登录用户，建议始终传稳定业务用户 ID。
+
+#### 2. App / WebView 动态拼接
+
+```js
+const user = await getLoginUser();
+const url =
+  "http://<server-host>:5300/sdk/chat.html" +
+  "?appId=your-app-id" +
+  "&userId=" + encodeURIComponent(user.id) +
+  "&apiBaseUrl=" + encodeURIComponent("http://<server-host>:5300");
+
+webview.loadURL(url);
+```
 
 常见问题：
 - 页面空白 + `chat.min.js 404` / `style.css MIME text/html`：
@@ -130,13 +220,30 @@ http://127.0.0.1:5500/web-sdk/chat.html?appId=demo_kefu_app&userId=u_10086
 - [PRD](./docs/PRD.md)
 - [运维手册](./docs/Operations.md)
 
-## 接入示例
+## 最小示例
+
+匿名浮窗：
 ```html
 <script
-  src="http://<server-host>/sdk/widget.min.js"
+  type="module"
+  src="http://<server-host>:5300/sdk/widget.min.js"
   data-kefu-appid="your-app-id"
-  data-kefu-api-base-url="http://<server-host>"
-  data-kefu-ws-url="ws://<server-host>/ws/chat"
-  data-kefu-user-id="optional-user-id"
+  data-kefu-api-base-url="http://<server-host>:5300"
 ></script>
+```
+
+业务用户浮窗：
+```html
+<script
+  type="module"
+  src="http://<server-host>:5300/sdk/widget.min.js"
+  data-kefu-appid="your-app-id"
+  data-kefu-api-base-url="http://<server-host>:5300"
+  data-kefu-user-id="u_10086"
+></script>
+```
+
+全屏聊天页：
+```text
+http://<server-host>:5300/sdk/chat.html?appId=your-app-id&userId=u_10086
 ```

@@ -1,8 +1,9 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>零点客服 SDK 浮窗演示</title>
   <style>
     :root {
@@ -22,10 +23,22 @@
       --shadow-glow: 0 0 60px rgba(99, 102, 241, 0.15);
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
-    html, body {
-      font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    html,
+    body {
+      font-family:
+        "SF Pro Display",
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        "PingFang SC",
+        "Microsoft YaHei",
+        sans-serif;
       color: var(--ink);
       line-height: 1.6;
       -webkit-font-smoothing: antialiased;
@@ -33,9 +46,15 @@
 
     body {
       background:
-        radial-gradient(ellipse 1200px 600px at 20% -10%, rgba(99, 102, 241, 0.12), transparent),
-        radial-gradient(ellipse 800px 400px at 80% 20%, rgba(6, 182, 212, 0.08), transparent),
-        radial-gradient(ellipse 600px 300px at 50% 100%, rgba(99, 102, 241, 0.06), transparent),
+        radial-gradient(ellipse 1200px 600px at 20% -10%,
+          rgba(99, 102, 241, 0.12),
+          transparent),
+        radial-gradient(ellipse 800px 400px at 80% 20%,
+          rgba(6, 182, 212, 0.08),
+          transparent),
+        radial-gradient(ellipse 600px 300px at 50% 100%,
+          rgba(99, 102, 241, 0.06),
+          transparent),
         linear-gradient(180deg, #f0f4ff 0%, #f8faff 50%, #f0f4ff 100%);
       min-height: 100vh;
       position: relative;
@@ -43,21 +62,25 @@
     }
 
     body::before {
-      content: '';
+      content: "";
       position: fixed;
       top: -50%;
       left: -50%;
       width: 200%;
       height: 200%;
       background:
-        radial-gradient(ellipse 800px 800px at 10% 10%, rgba(99, 102, 241, 0.04), transparent),
-        radial-gradient(ellipse 600px 600px at 90% 80%, rgba(6, 182, 212, 0.04), transparent);
+        radial-gradient(ellipse 800px 800px at 10% 10%,
+          rgba(99, 102, 241, 0.04),
+          transparent),
+        radial-gradient(ellipse 600px 600px at 90% 80%,
+          rgba(6, 182, 212, 0.04),
+          transparent);
       pointer-events: none;
       z-index: -1;
     }
 
     body::after {
-      content: '';
+      content: "";
       position: fixed;
       top: 0;
       left: 0;
@@ -93,14 +116,18 @@
       width: 40px;
       height: 40px;
       border-radius: 12px;
-      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      background: linear-gradient(135deg,
+          var(--primary),
+          var(--primary-light));
       box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
       display: flex;
       align-items: center;
       justify-content: center;
       position: relative;
       overflow: hidden;
-      transition: transform 0.3s, box-shadow 0.3s;
+      transition:
+        transform 0.3s,
+        box-shadow 0.3s;
     }
 
     .logo-icon img {
@@ -115,10 +142,12 @@
     }
 
     .logo-icon::before {
-      content: '';
+      content: "";
       position: absolute;
       inset: 0;
-      background: linear-gradient(135deg, transparent, rgba(255,255,255,0.2));
+      background: linear-gradient(135deg,
+          transparent,
+          rgba(255, 255, 255, 0.2));
     }
 
     .logo-text {
@@ -138,14 +167,16 @@
     }
 
     .hero::before {
-      content: '';
+      content: "";
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
       width: 500px;
       height: 500px;
-      background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+      background: radial-gradient(circle,
+          rgba(99, 102, 241, 0.08) 0%,
+          transparent 70%);
       pointer-events: none;
     }
 
@@ -167,7 +198,7 @@
     }
 
     .hero-badge::before {
-      content: '';
+      content: "";
       width: 6px;
       height: 6px;
       background: var(--primary);
@@ -176,8 +207,17 @@
     }
 
     @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.6; transform: scale(1.1); }
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 0.6;
+        transform: scale(1.1);
+      }
     }
 
     h1 {
@@ -205,8 +245,13 @@
     .code-card {
       border-radius: 20px;
       border: 1px solid rgba(17, 27, 49, 0.8);
-      background: linear-gradient(165deg, #0b1220 0%, #0f1e3b 40%, #13294f 100%);
-      box-shadow: 0 20px 50px rgba(9, 18, 37, 0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+      background: linear-gradient(165deg,
+          #0b1220 0%,
+          #0f1e3b 40%,
+          #13294f 100%);
+      box-shadow:
+        0 20px 50px rgba(9, 18, 37, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05);
       overflow: hidden;
       max-width: 800px;
       margin: 0 auto 32px;
@@ -214,13 +259,16 @@
     }
 
     .code-card::before {
-      content: '';
+      content: "";
       position: absolute;
       top: 0;
       left: 0;
       right: 0;
       height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.5), transparent);
+      background: linear-gradient(90deg,
+          transparent,
+          rgba(99, 102, 241, 0.5),
+          transparent);
     }
 
     .code-head {
@@ -251,26 +299,46 @@
       height: 12px;
       border-radius: 50%;
       display: inline-block;
-      box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
       position: relative;
     }
 
-    .dots i:nth-child(1) { background: #ff5f57; }
-    .dots i:nth-child(2) { background: #febc2e; }
-    .dots i:nth-child(3) { background: #28c840; }
+    .dots i:nth-child(1) {
+      background: #ff5f57;
+    }
+
+    .dots i:nth-child(2) {
+      background: #febc2e;
+    }
+
+    .dots i:nth-child(3) {
+      background: #28c840;
+    }
 
     .code-body {
       margin: 0;
       padding: 28px 32px;
       color: #dbeafe;
-      font: 14px/2 "SF Mono", "Fira Code", "Consolas", monospace;
+      font:
+        14px/2 "SF Mono",
+        "Fira Code",
+        "Consolas",
+        monospace;
       white-space: pre-wrap;
       word-break: break-all;
     }
 
-    .tk1 { color: #93c5fd; }
-    .tk2 { color: #fca5a5; }
-    .tk3 { color: #86efac; }
+    .tk1 {
+      color: #93c5fd;
+    }
+
+    .tk2 {
+      color: #fca5a5;
+    }
+
+    .tk3 {
+      color: #86efac;
+    }
 
     .info-card {
       background: var(--bg-card);
@@ -286,13 +354,16 @@
     }
 
     .info-card::before {
-      content: '';
+      content: "";
       position: absolute;
       top: 0;
       left: 0;
       right: 0;
       height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.3), transparent);
+      background: linear-gradient(90deg,
+          transparent,
+          rgba(6, 182, 212, 0.3),
+          transparent);
     }
 
     .info-card h2 {
@@ -325,7 +396,7 @@
     }
 
     .info-item::before {
-      content: '✓';
+      content: "✓";
       flex-shrink: 0;
       width: 20px;
       height: 20px;
@@ -342,7 +413,9 @@
     .cta-hint {
       margin-top: 48px;
       padding: 24px;
-      background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(6, 182, 212, 0.08));
+      background: linear-gradient(135deg,
+          rgba(99, 102, 241, 0.08),
+          rgba(6, 182, 212, 0.08));
       border: 1px solid rgba(99, 102, 241, 0.12);
       border-radius: 16px;
       text-align: center;
@@ -376,17 +449,19 @@
         flex-direction: column;
         gap: 6px;
       }
+
       .param-label {
         width: auto;
       }
     }
   </style>
 </head>
+
 <body>
   <div class="container">
     <header>
       <a href="/" class="logo">
-        <div class="logo-icon"><img src="./logo.png" alt="logo"></div>
+        <div class="logo-icon"><img src="./logo.png" alt="logo" /></div>
         <span class="logo-text">零点客服</span>
       </a>
     </header>
@@ -395,7 +470,7 @@
       <div class="hero-badge">SDK 浮窗演示</div>
       <h1>网页嵌入式接入</h1>
       <p class="hero-desc">
-        右下角会出现"在线咨询"浮窗按钮<br>
+        右下角会出现"在线咨询"浮窗按钮<br />
         该页面用于验证网页嵌入式接入效果
       </p>
     </section>
@@ -408,17 +483,56 @@
         </span>
       </div>
       <pre class="code-body"><span class="tk1">appId</span>  <span class="tk2">=</span>  <span class="tk3">"demo_kefu_app"</span>
-<span class="tk1">userId</span> <span class="tk2">=</span> <span class="tk3">"u_demo_visitor"</span></pre>
+<span class="tk1">userId</span> <span class="tk2">=</span> <span class="tk3">可选：接入方自己的业务用户ID</span>
+<span class="tk1">默认</span>   <span class="tk2">=</span>  <span class="tk3">不传，SDK 自动生成浏览器唯一访客ID</span></pre>
     </div>
 
     <div class="info-card">
       <h2><span>✨</span> 接入说明</h2>
       <div class="info-list">
-        <div class="info-item">引入 SDK 脚本后，浮窗将自动出现在页面右下角</div>
+        <div class="info-item">
+          引入 SDK 脚本后，浮窗将自动出现在页面右下角
+        </div>
         <div class="info-item">访客点击浮窗即可发起在线咨询会话</div>
         <div class="info-item">支持文本、图片、语音、文件等多种消息类型</div>
         <div class="info-item">可自定义浮窗样式、位置和欢迎语</div>
+        <div class="info-item">
+          默认按浏览器本地生成唯一访客ID；如需绑定业务账号，再传 userId /
+          visitorId
+        </div>
       </div>
+    </div>
+
+    <div class="code-card">
+      <div class="code-head">
+        <span class="code-title">
+          <span class="dots"><i></i><i></i><i></i></span>
+          匿名访客接入
+        </span>
+      </div>
+      <pre class="code-body"><span class="tk4">&lt;script</span> <span class="tk5">type=</span><span class="tk3">"module"</span> <span class="tk5">src=</span><span class="tk3">"/sdk/widget.min.js"</span>
+  <span class="tk5">data-kefu-appid=</span><span class="tk3">"demo_kefu_app"</span>
+  <span class="tk5">data-kefu-api-base-url=</span><span class="tk3">"http://127.0.0.1:5300"</span>
+<span class="tk4">&gt;&lt;/script&gt;</span></pre>
+    </div>
+
+    <div class="code-card">
+      <div class="code-head">
+        <span class="code-title">
+          <span class="dots"><i></i><i></i><i></i></span>
+          动态传入业务用户ID
+        </span>
+      </div>
+      <pre class="code-body"><span class="tk4">&lt;script</span> <span class="tk5">type=</span><span class="tk3">"module"</span> <span class="tk5">src=</span><span class="tk3">"/sdk/widget.min.js"</span> <span class="tk5">data-kefu-sdk</span><span class="tk4">&gt;&lt;/script&gt;</span>
+
+<span class="tk4">&lt;script</span> <span class="tk5">type=</span><span class="tk3">"module"</span><span class="tk4">&gt;</span>
+  <span class="tk6">const</span> <span class="tk1">user</span> <span class="tk2">=</span> <span class="tk6">await</span> <span class="tk1">fetchCurrentUser</span><span class="tk4">()</span>
+  <span class="tk1">window</span>.<span class="tk1">KefuChat</span>.<span class="tk1">init</span><span class="tk4">({</span>
+    <span class="tk1">appId</span><span class="tk2">:</span> <span class="tk3">"demo_kefu_app"</span><span class="tk2">,</span>
+    <span class="tk1">userId</span><span class="tk2">:</span> <span class="tk1">user</span>.<span class="tk1">id</span><span class="tk2">,</span> <span class="tk7">// 或 visitorId</span>
+    <span class="tk1">apiBaseUrl</span><span class="tk2">:</span> <span class="tk3">"http://127.0.0.1:5300"</span>
+  <span class="tk4">})</span>
+<span class="tk4">&lt;/script&gt;</span></pre>
     </div>
 
     <div class="cta-hint">
@@ -430,14 +544,9 @@
     </footer>
   </div>
 
-  <script
-    type="module"
-    src="widget.min.js?v=20260426-0424"
-    data-kefu-appid="demo_kefu_app"
-    data-kefu-user-id="u_demo_visitor"
-    defer
-  ></script>
+  <script type="module" src="widget.min.js?v=20260426-0424" data-kefu-appid="demo_kefu_app" defer></script>
 
   <script type="module" src="i18n.js"></script>
 </body>
+
 </html>

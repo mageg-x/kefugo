@@ -3,6 +3,22 @@ import { initRuntimeI18n, setLocale } from "./i18n.js";
 
 initRuntimeI18n();
 
+function findSDKScriptTag() {
+  const current = document.currentScript;
+  if (current instanceof HTMLScriptElement && current.src) {
+    return current;
+  }
+  const tagged = document.querySelector("script[data-kefu-appid], script[data-kefu-sdk]");
+  if (tagged instanceof HTMLScriptElement && tagged.src) {
+    return tagged;
+  }
+  const scripts = Array.from(document.querySelectorAll("script[src]"));
+  return (
+    scripts.find((script) => /(^|\/)widget(\.min)?\.js(\?|$)/.test(script.getAttribute("src") || "")) ||
+    null
+  );
+}
+
 function loadCSS() {
   return new Promise((resolve, reject) => {
     const existingLink = document.getElementById("kefu-sdk-styles");
@@ -11,11 +27,9 @@ function loadCSS() {
       return;
     }
 
-    const script =
-      document.currentScript ||
-      document.querySelector("script[data-kefu-appid]");
+    const script = findSDKScriptTag();
     if (!script) {
-      console.error("Cannot find script tag with data-kefu-appid attribute");
+      console.error("Cannot find KefuChat SDK script tag");
       resolve();
       return;
     }
@@ -53,6 +67,7 @@ let appId = null;
 let apiBaseUrl = null;
 let wsUrl = null;
 let userId = null;
+let visitorId = null;
 
 for (const script of scriptTags) {
   if (script.hasAttribute("data-kefu-appid")) {
@@ -60,6 +75,7 @@ for (const script of scriptTags) {
     apiBaseUrl = script.getAttribute("data-kefu-api-base-url");
     wsUrl = script.getAttribute("data-kefu-ws-url");
     userId = script.getAttribute("data-kefu-user-id");
+    visitorId = script.getAttribute("data-kefu-visitor-id");
     break;
   }
 }
@@ -69,6 +85,6 @@ if (appId) {
     appId,
     ...(apiBaseUrl ? { apiBaseUrl } : {}),
     ...(wsUrl ? { wsUrl } : {}),
-    ...(userId ? { userId } : {}),
+    ...((userId || visitorId) ? { userId: userId || visitorId } : {}),
   });
 }

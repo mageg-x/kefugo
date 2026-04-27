@@ -42,7 +42,7 @@
           :app-id="appId"
           :api-base-url="apiBaseUrl"
           :ws-url="wsUrl"
-          :user-id="userId"
+          :user-id="resolvedUserId"
           :service-name="widgetName"
           :service-avatar="widgetLogo"
           @config-loaded="handleConfigLoaded"
@@ -78,6 +78,7 @@ const props = defineProps({
   },
   wsUrl: { type: String, default: "" },
   userId: { type: String, default: "" },
+  visitorId: { type: String, default: "" },
 });
 
 const isOpen = ref(false);
@@ -92,6 +93,7 @@ const panelWidth = ref(390);
 const unreadBadge = ref(0);
 
 const widgetName = computed(() => configName.value || "零点客服");
+const resolvedUserId = computed(() => props.userId || props.visitorId || "");
 const unreadBadgeText = computed(() => (unreadBadge.value > 99 ? "99+" : String(unreadBadge.value)));
 const adminAppsUrl = computed(() => {
   if (typeof window !== "undefined" && window.location?.origin) {
