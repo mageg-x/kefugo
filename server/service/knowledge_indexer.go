@@ -9,6 +9,7 @@ import (
 
 	"kefu-server/models"
 	"kefu-server/store"
+	"kefu-server/utils/logger"
 )
 
 var (
@@ -21,6 +22,8 @@ var (
 	multiSpacePattern      = regexp.MustCompile(`\s{2,}`)
 )
 
+const knowledgeInsertBatchSize = 16
+
 // RebuildChunksFromRawContent 按文档 raw 内容重新切片入库（用于编辑/重建）。
 // 说明：通过 VectorStore 抽象写入向量后端，默认实现为 sqlite 内置存储。
 func RebuildChunksFromRawContent(ctx context.Context, vc VectorStore, doc *models.KnowledgeDocument) (int, error) {
@@ -30,6 +33,7 @@ func RebuildChunksFromRawContent(ctx context.Context, vc VectorStore, doc *model
 	if strings.TrimSpace(doc.RawContent) == "" {
 		return 0, nil
 	}
+	startedAt := time.Now()
 
 	var existed []models.KnowledgeChunk
 	if err := store.DB.Where("document_id = ?", doc.ID).Find(&existed).Error; err != nil {
@@ -44,32 +48,48 @@ func RebuildChunksFromRawContent(ctx context.Context, vc VectorStore, doc *model
 
 	parts := splitTextForKnowledge(strings.TrimSpace(doc.RawContent), 900, 120)
 	now := time.Now()
+	baseNano := now.UnixNano()
 	created := 0
-	for idx, part := range parts {
-		vectorID := fmt.Sprintf("kb_%d_doc_%d_chunk_%d_%d", doc.BaseID, doc.ID, idx+1, now.UnixNano())
-		meta := map[string]interface{}{
-			"app_id":      doc.AppID,
-			"base_id":     doc.BaseID,
-			"document_id": doc.ID,
-			"chunk_seq":   idx + 1,
-			"doc_name":    doc.Name,
+	for start := 0; start < len(parts); start += knowledgeInsertBatchSize {
+		end := start + knowledgeInsertBatchSize
+		if end > len(parts) {
+			end = len(parts)
 		}
-		if err := vc.InsertText(ctx, doc.VectorCollection, vectorID, part, meta); err != nil {
+		batchItems := make([]VectorTextItem, 0, end-start)
+		batchRows := make([]models.KnowledgeChunk, 0, end-start)
+		for idx := start; idx < end; idx++ {
+			part := parts[idx]
+			vectorID := fmt.Sprintf("kb_%d_doc_%d_chunk_%d_%d", doc.BaseID, doc.ID, idx+1, baseNano)
+			meta := map[string]interface{}{
+				"app_id":      doc.AppID,
+				"base_id":     doc.BaseID,
+				"document_id": doc.ID,
+				"chunk_seq":   idx + 1,
+				"doc_name":    doc.Name,
+			}
+			batchItems = append(batchItems, VectorTextItem{
+				VectorID: vectorID,
+				Text:     part,
+				Metadata: meta,
+			})
+			batchRows = append(batchRows, models.KnowledgeChunk{
+				BaseID:       doc.BaseID,
+				DocumentID:   doc.ID,
+				AppID:        doc.AppID,
+				VectorID:     vectorID,
+				ChunkSeq:     idx + 1,
+				Content:      part,
+				ContentChars: len([]rune(part)),
+			})
+		}
+
+		if err := vc.InsertTexts(ctx, doc.VectorCollection, batchItems); err != nil {
 			return created, err
 		}
-		row := models.KnowledgeChunk{
-			BaseID:       doc.BaseID,
-			DocumentID:   doc.ID,
-			AppID:        doc.AppID,
-			VectorID:     vectorID,
-			ChunkSeq:     idx + 1,
-			Content:      part,
-			ContentChars: len([]rune(part)),
-		}
-		if err := store.DB.Create(&row).Error; err != nil {
+		if err := store.DB.WithContext(ctx).CreateInBatches(batchRows, knowledgeInsertBatchSize).Error; err != nil {
 			return created, fmt.Errorf("save chunk row failed: %w", err)
 		}
-		created++
+		created += len(batchRows)
 	}
 
 	doc.ChunkCount = created
@@ -79,6 +99,7 @@ func RebuildChunksFromRawContent(ctx context.Context, vc VectorStore, doc *model
 	if err := store.DB.Save(doc).Error; err != nil {
 		return created, fmt.Errorf("update document index result failed: %w", err)
 	}
+	logger.Infof("knowledge index completed doc_id=%d chunks=%d duration_ms=%d", doc.ID, created, time.Since(startedAt).Milliseconds())
 	return created, nil
 }
 

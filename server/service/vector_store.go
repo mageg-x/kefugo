@@ -12,6 +12,7 @@ import (
 	"sync"
 	"unicode"
 
+	"gorm.io/gorm/clause"
 	"kefu-server/models"
 	"kefu-server/service/ai/embedding"
 	"kefu-server/store"
@@ -25,11 +26,18 @@ type VectorHit struct {
 	Content  string                 `json:"content"`
 }
 
+type VectorTextItem struct {
+	VectorID string
+	Text     string
+	Metadata map[string]interface{}
+}
+
 type VectorStore interface {
 	Health(ctx context.Context) error
 	EnsureCollection(ctx context.Context, name string) error
 	DeleteCollection(ctx context.Context, name string) error
 	InsertText(ctx context.Context, collection, vectorID, text string, metadata map[string]interface{}) error
+	InsertTexts(ctx context.Context, collection string, items []VectorTextItem) error
 	DeleteVector(ctx context.Context, collection, vectorID string) error
 	SearchText(ctx context.Context, collection, query string, topK int) ([]VectorHit, error)
 }
@@ -112,7 +120,7 @@ func (s *SQLiteVecStore) initSchema(ctx context.Context) error {
 		}
 	}
 
-		if _, err := sqlDB.ExecContext(ctx, `CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_vec_index USING vec0(
+	if _, err := sqlDB.ExecContext(ctx, `CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_vec_index USING vec0(
 			vector_id TEXT PRIMARY KEY,
 			embedding float[384]
 		)`); err != nil {
@@ -218,55 +226,97 @@ func (s *SQLiteVecStore) DeleteCollection(ctx context.Context, name string) erro
 }
 
 func (s *SQLiteVecStore) InsertText(ctx context.Context, collection, vectorID, text string, metadata map[string]interface{}) error {
+	return s.InsertTexts(ctx, collection, []VectorTextItem{
+		{
+			VectorID: vectorID,
+			Text:     text,
+			Metadata: metadata,
+		},
+	})
+}
+
+func (s *SQLiteVecStore) InsertTexts(ctx context.Context, collection string, items []VectorTextItem) error {
 	collection = strings.TrimSpace(collection)
-	vectorID = strings.TrimSpace(vectorID)
-	text = strings.TrimSpace(text)
-	if collection == "" || vectorID == "" || text == "" {
+	if collection == "" || len(items) == 0 {
 		return fmt.Errorf("invalid vector input")
 	}
 	if store.DB == nil {
 		return fmt.Errorf("database not initialized")
 	}
 
-	metaRaw := "{}"
-	if metadata != nil {
-		if b, err := json.Marshal(metadata); err == nil {
-			metaRaw = string(b)
-		}
-	}
 	if err := s.EnsureCollection(ctx, collection); err != nil {
 		return err
 	}
 
-	row := models.KnowledgeVectorEntry{
-		Collection: collection,
-		VectorID:   vectorID,
-		Content:    text,
-		Metadata:   metaRaw,
+	prepared := make([]VectorTextItem, 0, len(items))
+	rows := make([]models.KnowledgeVectorEntry, 0, len(items))
+	texts := make([]string, 0, len(items))
+	for _, item := range items {
+		vectorID := strings.TrimSpace(item.VectorID)
+		text := strings.TrimSpace(item.Text)
+		if vectorID == "" || text == "" {
+			return fmt.Errorf("invalid vector input")
+		}
+		metaRaw := "{}"
+		if item.Metadata != nil {
+			if b, err := json.Marshal(item.Metadata); err == nil {
+				metaRaw = string(b)
+			}
+		}
+		prepared = append(prepared, VectorTextItem{
+			VectorID: vectorID,
+			Text:     text,
+			Metadata: item.Metadata,
+		})
+		rows = append(rows, models.KnowledgeVectorEntry{
+			Collection: collection,
+			VectorID:   vectorID,
+			Content:    text,
+			Metadata:   metaRaw,
+		})
+		texts = append(texts, text)
 	}
 
 	if err := s.Health(ctx); err != nil {
-		logger.Warnf("vector store insert fallback collection=%s vector_id=%s err=%v", collection, vectorID, err)
-		return store.DB.WithContext(ctx).Where("vector_id = ?", vectorID).Assign(row).FirstOrCreate(&row).Error
+		logger.Warnf("vector store insert fallback collection=%s count=%d err=%v", collection, len(prepared), err)
+		return s.upsertVectorEntries(ctx, rows)
 	}
 
 	embProvider, embDims, embErr := s.getActiveEmbeddingProvider(ctx)
-	var feature []float32
-	var dims int
-
+	features := make([][]float32, len(prepared))
+	dims := 384
 	if embErr == nil && embProvider != nil {
-		vec, err := embProvider.GetEmbedding(ctx, text)
-		if err != nil {
-			logger.Warnf("embedding provider failed, falling back to word-hash: %v", err)
-			feature = textToFeatureVec32(text)
-			dims = 384
+		dims = embDims
+		vecs, err := embProvider.GetEmbeddings(ctx, texts)
+		if err == nil && len(vecs) == len(prepared) {
+			features = vecs
 		} else {
-			feature = vec
-			dims = embDims
+			if err != nil {
+				logger.Warnf("embedding batch failed for %d texts, retrying one by one: %v", len(prepared), err)
+			} else {
+				logger.Warnf("embedding batch returned mismatch count=%d expected=%d, retrying one by one", len(vecs), len(prepared))
+			}
+			retryOK := true
+			for i, text := range texts {
+				vec, singleErr := embProvider.GetEmbedding(ctx, text)
+				if singleErr != nil {
+					retryOK = false
+					logger.Warnf("embedding single retry failed at index=%d, falling back to word-hash batch: %v", i, singleErr)
+					break
+				}
+				features[i] = vec
+			}
+			if !retryOK {
+				dims = 384
+				for i, text := range texts {
+					features[i] = textToFeatureVec32(text)
+				}
+			}
 		}
 	} else {
-		feature = textToFeatureVec32(text)
-		dims = 384
+		for i, text := range texts {
+			features[i] = textToFeatureVec32(text)
+		}
 	}
 
 	vecTableName, metaTableName, err := s.ensureVecTable(ctx, dims)
@@ -274,30 +324,58 @@ func (s *SQLiteVecStore) InsertText(ctx context.Context, collection, vectorID, t
 		return err
 	}
 
-	vecLiteral := float32SliceToSQLiteLiteral(feature)
-
 	sqlDB, err := store.DB.DB()
 	if err != nil {
 		return err
 	}
-	if _, err := sqlDB.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE vector_id = ?", vecTableName), vectorID); err != nil {
+	tx, err := sqlDB.BeginTx(ctx, nil)
+	if err != nil {
 		return err
 	}
-	if _, err := sqlDB.ExecContext(ctx, fmt.Sprintf("INSERT INTO %s(vector_id, embedding) VALUES(?, vec_f32(?))", vecTableName), vectorID, vecLiteral); err != nil {
-		return err
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	for i, item := range prepared {
+		feature := features[i]
+		if len(feature) == 0 {
+			feature = textToFeatureVec32(item.Text)
+		}
+		vecLiteral := float32SliceToSQLiteLiteral(feature)
+		if _, err := tx.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE vector_id = ?", vecTableName), item.VectorID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, fmt.Sprintf("INSERT INTO %s(vector_id, embedding) VALUES(?, vec_f32(?))", vecTableName), item.VectorID, vecLiteral); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, fmt.Sprintf(`
+			INSERT INTO %s(vector_id, collection, metadata, content)
+			VALUES(?, ?, ?, ?)
+			ON CONFLICT(vector_id) DO UPDATE SET
+				collection=excluded.collection,
+				metadata=excluded.metadata,
+				content=excluded.content
+		`, metaTableName), item.VectorID, collection, rows[i].Metadata, item.Text); err != nil {
+			return err
+		}
 	}
-	if _, err := sqlDB.ExecContext(ctx, fmt.Sprintf(`
-		INSERT INTO %s(vector_id, collection, metadata, content)
-		VALUES(?, ?, ?, ?)
-		ON CONFLICT(vector_id) DO UPDATE SET
-			collection=excluded.collection,
-			metadata=excluded.metadata,
-			content=excluded.content
-	`, metaTableName), vectorID, collection, metaRaw, text); err != nil {
+	if err := tx.Commit(); err != nil {
 		return err
 	}
 
-	return store.DB.WithContext(ctx).Where("vector_id = ?", vectorID).Assign(row).FirstOrCreate(&row).Error
+	return s.upsertVectorEntries(ctx, rows)
+}
+
+func (s *SQLiteVecStore) upsertVectorEntries(ctx context.Context, rows []models.KnowledgeVectorEntry) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	return store.DB.WithContext(ctx).
+		Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "vector_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"collection", "content", "metadata", "updated_at"}),
+		}).
+		CreateInBatches(rows, 100).Error
 }
 
 func (s *SQLiteVecStore) DeleteVector(ctx context.Context, collection, vectorID string) error {
