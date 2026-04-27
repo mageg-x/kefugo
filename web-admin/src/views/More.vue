@@ -101,6 +101,7 @@
               :value="item.value"
             />
           </el-select>
+          <div class="setting-hint">仅选择聊天模型；向量化与重排使用知识库中的全局模型配置。</div>
         </el-form-item>
         <el-form-item :label="t('pageMore.ai.triggerScope')">
           <el-select v-model="aiConfig.whenAssigned">
@@ -570,10 +571,13 @@ async function loadAiModelOptions() {
   try {
     const resp = await api.listAPIModels();
     const rows = resp?.data?.data?.data || [];
-    aiModelOptions.value = rows.map((row) => ({
-      value: String(row?.model_name || ""),
-      label: `${row?.model_name || ""}${row?.status === 1 ? ` (${t("status.enabled")})` : ""}`,
-    })).filter((item) => item.value);
+    aiModelOptions.value = rows
+      .filter((row) => String(row?.model_type || "").trim() === "chat")
+      .map((row) => ({
+        value: String(row?.model_name || ""),
+        label: `${row?.provider || "chat"} / ${row?.model_name || ""}${row?.status === 1 ? ` (${t("status.enabled")})` : ""}`,
+      }))
+      .filter((item) => item.value);
   } catch {
     aiModelOptions.value = [];
   }
@@ -1288,6 +1292,13 @@ onBeforeUnmount(() => {
   padding: 10px 16px 14px;
   border-top: 1px solid rgba(229, 231, 235, 0.7);
   background: #f8fbff;
+}
+
+.setting-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #64748b;
 }
 
 .more-page :deep(.more-table) {

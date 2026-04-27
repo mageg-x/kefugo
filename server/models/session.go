@@ -31,6 +31,7 @@ type Session struct {
 	LastMessage         string `json:"last_message,omitempty"`            // 最近一条消息摘要
 	LastMessageType     string `json:"last_message_type,omitempty"`       // 最近一条消息类型
 	LastVisitorAckMsgID string `json:"last_visitor_ack_msg_id,omitempty"` // 最后成功推送给访客的消息ID
+	WelcomeSentAt       int64  `json:"welcome_sent_at,omitempty"`         // 当前会话欢迎语已发送时间
 	UnreadCount         int    `json:"unread_count"`                      // 未读消息数
 	LastActiveAt        int64  `json:"last_active_at"`                    // 最近活跃时间（访客或客服）
 	Closed              bool   `json:"closed"`                            // 会话是否关闭

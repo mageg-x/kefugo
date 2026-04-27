@@ -685,10 +685,9 @@ func (vc *VisitorController) WSHandler(c *gin.Context) {
 	registerVisitorConn(session.SID, visitorConn)
 	defer unregisterVisitorConnInstance(session.SID, visitorConn)
 
-	// 如果会话没有消息记录（首次访问），发送欢迎语。
-	// 欢迎语只作为当前连接的临时提示，不写入历史消息，避免固定 visitor
-	// 在复用会话时反复回放很早之前的欢迎语。
-	if session.LastMessage == "" {
+	// 欢迎语只在当前会话首次连接时发送一次，不写入历史消息。
+	// 这样既避免重连反复出现，也不会在长期复用 visitor 时回放很久之前的欢迎语。
+	if session.WelcomeSentAt <= 0 {
 		app := models.GetApp(session.AppID())
 		if app != nil && strings.TrimSpace(app.WelcomeMsg) != "" {
 			now := time.Now().Unix()
@@ -707,6 +706,8 @@ func (vc *VisitorController) WSHandler(c *gin.Context) {
 				Meta:      string(wb),
 				Timestamp: now,
 			}
+			session.WelcomeSentAt = now
+			_ = ss.SaveSession(session)
 			_ = PushMessageToVisitor(session.VisitorID(), session.SID, &welMsg)
 		}
 	}
@@ -1145,7 +1146,7 @@ func (vc *VisitorController) dispatchAIBotReply(sessionID, triggerMsgID, questio
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel := knowledgeQAContext()
 	defer cancel()
 
 	// 先推送 typing，提升交互反馈。
@@ -1290,9 +1291,11 @@ func (vc *VisitorController) generateAIBotAnswer(ctx context.Context, session *m
 		botName = "AI机器人"
 	}
 	lastTypingPush := time.Now()
+	startAt := time.Now()
 
 	hits, err := searchKnowledgeHitsByApp(ctx, appID, question, topK)
 	if err == nil && len(hits) > 0 {
+		logger.Infof("ai bot knowledge hits sid=%s app_id=%s hits=%d cost_ms=%d", session.SID, appID, len(hits), time.Since(startAt).Milliseconds())
 		modelOverride := strings.TrimSpace(cfg.AIBotModel)
 		if modelOverride != "" {
 			if modelCfg, cfgErr := service.GetEnabledAPIModelConfig(); cfgErr == nil {
@@ -1310,8 +1313,15 @@ func (vc *VisitorController) generateAIBotAnswer(ctx context.Context, session *m
 						lastTypingPush = time.Now()
 					}
 				}); inferErr == nil && out != nil && strings.TrimSpace(out.Answer) != "" {
+					logger.Infof("ai bot llm answer used sid=%s app_id=%s mode=override model=%s cost_ms=%d", session.SID, appID, modelOverride, time.Since(startAt).Milliseconds())
 					return strings.TrimSpace(out.Answer)
+				} else if inferErr != nil {
+					logger.Warnf("ai bot override llm infer failed sid=%s app_id=%s model=%s err=%v", session.SID, appID, modelOverride, inferErr)
+				} else {
+					logger.Warnf("ai bot override llm returned empty sid=%s app_id=%s model=%s", session.SID, appID, modelOverride)
 				}
+			} else {
+				logger.Warnf("ai bot override llm config load failed sid=%s app_id=%s model=%s err=%v", session.SID, appID, modelOverride, cfgErr)
 			}
 		}
 		if out, _, inferErr := service.AnswerWithEnabledAPIModelStreamWithSystemPrompt(ctx, question, hits, systemPrompt, func(current string) {
@@ -1327,9 +1337,20 @@ func (vc *VisitorController) generateAIBotAnswer(ctx context.Context, session *m
 				lastTypingPush = time.Now()
 			}
 		}); inferErr == nil && out != nil && strings.TrimSpace(out.Answer) != "" {
+			logger.Infof("ai bot llm answer used sid=%s app_id=%s mode=enabled cost_ms=%d", session.SID, appID, time.Since(startAt).Milliseconds())
 			return strings.TrimSpace(out.Answer)
+		} else if inferErr != nil {
+			logger.Warnf("ai bot enabled llm infer failed sid=%s app_id=%s err=%v", session.SID, appID, inferErr)
+		} else {
+			logger.Warnf("ai bot enabled llm returned empty sid=%s app_id=%s", session.SID, appID)
 		}
+		logger.Warnf("ai bot fallback suggestion used sid=%s app_id=%s hits=%d cost_ms=%d", session.SID, appID, len(hits), time.Since(startAt).Milliseconds())
 		return composeAISuggestion(cfg.AIBotStyle, "", question, vectorHitsToRAGChunks(hits))
+	}
+	if err != nil {
+		logger.Warnf("ai bot knowledge search failed sid=%s app_id=%s err=%v", session.SID, appID, err)
+	} else {
+		logger.Warnf("ai bot knowledge search no hits sid=%s app_id=%s", session.SID, appID)
 	}
 	return composeAISuggestion(cfg.AIBotStyle, "", question, nil)
 }
