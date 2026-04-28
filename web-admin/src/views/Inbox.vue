@@ -838,6 +838,15 @@ async function markSessionReadIfPossible(sid) {
   return true;
 }
 
+function syncSelectedSessionFromList() {
+  const sid = String(selectedSession.value?.sid || "").trim();
+  if (!sid) return;
+  const latest = sessions.value.find((s) => s.sid === sid);
+  if (latest) {
+    selectedSession.value = latest;
+  }
+}
+
 async function selectSession(session) {
   selectedSession.value = session;
   messages.value = [];
@@ -972,11 +981,7 @@ async function acceptCurrentSession() {
     const resp = await api.acceptSession(selectedSession.value.sid);
     selectedSession.value = resp?.data?.data?.session || selectedSession.value;
     await reloadSessions();
-    const sid = selectedSession.value?.sid;
-    if (sid) {
-      const latest = sessions.value.find((s) => s.sid === sid);
-      if (latest) selectedSession.value = latest;
-    }
+    syncSelectedSessionFromList();
     ElMessage.success(t("pageInbox.toast.accepted"));
   } catch (error) {
     ElMessage.error(error.message || t("pageInbox.toast.acceptFailed"));
@@ -986,13 +991,11 @@ async function acceptCurrentSession() {
 async function closeCurrentSession() {
   if (!selectedSession.value) return;
   try {
-    const ok = wsClient.value?.sendClose(selectedSession.value.sid);
-    if (!ok) {
-      await api.closeSession(selectedSession.value.sid);
-    }
+    await api.closeSession(selectedSession.value.sid);
     selectedSession.value = { ...selectedSession.value, status: "closed" };
     ElMessage.success(t("pageInbox.toast.sessionClosed"));
     await reloadSessions();
+    syncSelectedSessionFromList();
   } catch (error) {
     ElMessage.error(error.message || t("pageInbox.toast.closeFailed"));
   }
@@ -1003,6 +1006,7 @@ async function markFollowUp() {
   try {
     await api.followUpSession(selectedSession.value.sid);
     await reloadSessions();
+    syncSelectedSessionFromList();
     ElMessage.success(t("pageInbox.toast.markedFollow"));
   } catch (error) {
     ElMessage.error(error.message || t("pageInbox.toast.markFailed"));
@@ -1037,11 +1041,7 @@ async function confirmTransfer() {
     transferDialogVisible.value = false;
     ElMessage.success(t("pageInbox.toast.transferSuccess"));
     await reloadSessions();
-    const sid = selectedSession.value?.sid;
-    if (sid) {
-      const latest = sessions.value.find((s) => s.sid === sid);
-      if (latest) selectedSession.value = latest;
-    }
+    syncSelectedSessionFromList();
   } catch (error) {
     ElMessage.error(error.message || t("pageInbox.toast.transferFailed"));
   }

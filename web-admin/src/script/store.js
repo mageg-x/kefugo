@@ -3,6 +3,16 @@ import { defineStore } from 'pinia'
 const TOKEN_KEY = 'token'
 const USER_KEY = 'user'
 
+function parseStoredJSON(key, fallback = null) {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? JSON.parse(raw) : fallback
+  } catch {
+    localStorage.removeItem(key)
+    return fallback
+  }
+}
+
 function sanitizeUser(user) {
   if (!user || typeof user !== 'object') {
     return null
@@ -23,7 +33,7 @@ function sanitizeUser(user) {
 export const useStore = defineStore('global', {
   state: () => ({
     token: localStorage.getItem(TOKEN_KEY) || null,
-    user: sanitizeUser(JSON.parse(localStorage.getItem(USER_KEY) || 'null'))
+    user: sanitizeUser(parseStoredJSON(USER_KEY, null))
   }),
   getters: {
     isAuthenticated: (state) => !!state.token,

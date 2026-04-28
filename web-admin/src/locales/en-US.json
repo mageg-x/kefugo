@@ -63,6 +63,7 @@
   },
   "pageDashboard": {
     "title": "Dashboard",
+    "subtitle": "Monitor staff activity, session trends, and the latest handling status",
     "todaySessions": "Today's Sessions",
     "resolved": "Resolved",
     "pending": "Pending",
@@ -123,6 +124,18 @@
   "pageApps": {
     "title": "App Management",
     "subtitle": "Manage app configurations integrated with support system",
+    "overview": {
+      "inView": "Apps In View",
+      "enabled": "Enabled Apps",
+      "disabled": "Disabled Apps",
+      "contactReady": "With Contact"
+    },
+    "panel": {
+      "filters": "App Filters",
+      "filtersDesc": "Filter apps by name and status, then maintain integration settings in one place.",
+      "list": "App List",
+      "listDesc": "Review status, domain allowlist, contact information, and created time."
+    },
     "searchPlaceholder": "Search app name or AppID",
     "search": "Search",
     "statusFilter": "Status Filter",
@@ -172,6 +185,19 @@
   },
   "pageStaff": {
     "title": "Staff Team Management",
+    "subtitle": "Manage agent accounts, service apps, and active status in one place",
+    "overview": {
+      "inView": "Agents In View",
+      "online": "Online Agents",
+      "admins": "Admins",
+      "sessions": "Today's Sessions"
+    },
+    "panel": {
+      "actions": "Batch Actions",
+      "actionsDesc": "Enable or disable selected standard agents in batches. Admin accounts are excluded.",
+      "list": "Agent List",
+      "listDesc": "Review roles, online status, today's session load, and ratings."
+    },
     "addStaff": "Add Staff",
     "batchEnable": "Batch Enable",
     "batchDisable": "Batch Disable",
@@ -328,6 +354,11 @@
   "pageAudit": {
     "title": "Audit Logs",
     "subtitle": "Track key management operations",
+    "panel": {
+      "filtersDesc": "Filter key logs by operator, action, time range, and execution result.",
+      "list": "Audit Log List",
+      "listDesc": "Track important changes to apps, staff, and system settings."
+    },
     "refresh": "Refresh",
     "operator": "Operator",
     "actionInput": "Action, e.g. app.create",
@@ -343,10 +374,25 @@
     "targetType": "Target Type",
     "targetId": "Target ID",
     "detail": "Detail",
+    "viewDetail": "View Detail",
+    "detailDialog": "Audit Detail",
     "loadFailed": "Failed to load audit logs"
   },
   "pageVisitors": {
     "title": "Visitor Management",
+    "subtitle": "Review visitor status, devices, and most recent access activity",
+    "overview": {
+      "inView": "Visitors In View",
+      "online": "Online Visitors",
+      "offline": "Offline Visitors",
+      "sessions": "Total Sessions"
+    },
+    "panel": {
+      "filters": "Filters",
+      "filtersDesc": "Filter by visitor identity and online status, then export the current session data.",
+      "list": "Visitor List",
+      "listDesc": "Review source device, region, user agent, and last visit time."
+    },
     "search": "Search visitors",
     "statusFilter": "Status filter",
     "all": "All",

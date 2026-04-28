@@ -63,6 +63,7 @@
   },
   "pageDashboard": {
     "title": "数据看板",
+    "subtitle": "查看客服接待、会话趋势与近期处理动态",
     "todaySessions": "今日会话",
     "resolved": "已解决",
     "pending": "待处理",
@@ -123,6 +124,18 @@
   "pageApps": {
     "title": "应用管理",
     "subtitle": "管理接入客服系统的应用配置",
+    "overview": {
+      "inView": "当前页应用",
+      "enabled": "启用应用",
+      "disabled": "禁用应用",
+      "contactReady": "已填联系人"
+    },
+    "panel": {
+      "filters": "应用筛选",
+      "filtersDesc": "按名称与状态快速筛出目标应用，并统一维护接入参数。",
+      "list": "应用列表",
+      "listDesc": "查看接入状态、域名白名单、联系人与创建时间。"
+    },
     "searchPlaceholder": "搜索应用名称或 AppID",
     "search": "搜索",
     "statusFilter": "状态筛选",
@@ -172,6 +185,19 @@
   },
   "pageStaff": {
     "title": "客服团队管理",
+    "subtitle": "统一管理坐席账号、服务应用与启停状态",
+    "overview": {
+      "inView": "当前页坐席",
+      "online": "在线坐席",
+      "admins": "管理员",
+      "sessions": "今日会话总数"
+    },
+    "panel": {
+      "actions": "批量操作",
+      "actionsDesc": "对当前选中的普通坐席批量启停，管理员账号不参与批量动作。",
+      "list": "坐席列表",
+      "listDesc": "集中查看角色、在线状态、当日会话与评分表现。"
+    },
     "addStaff": "添加客服",
     "batchEnable": "批量启用",
     "batchDisable": "批量禁用",
@@ -328,6 +354,11 @@
   "pageAudit": {
     "title": "操作审计",
     "subtitle": "关键管理操作追踪",
+    "panel": {
+      "filtersDesc": "按操作人、动作、时间范围和结果筛出关键管理日志。",
+      "list": "审计日志",
+      "listDesc": "追踪应用、坐席和系统配置的关键变更记录。"
+    },
     "refresh": "刷新",
     "operator": "操作人",
     "actionInput": "动作，如 app.create",
@@ -343,10 +374,25 @@
     "targetType": "目标类型",
     "targetId": "目标ID",
     "detail": "详情",
+    "viewDetail": "查看详情",
+    "detailDialog": "审计详情",
     "loadFailed": "加载审计日志失败"
   },
   "pageVisitors": {
     "title": "访客管理",
+    "subtitle": "查看访客接入状态、终端信息与最近访问情况",
+    "overview": {
+      "inView": "当前页访客",
+      "online": "在线访客",
+      "offline": "离线访客",
+      "sessions": "会话总数"
+    },
+    "panel": {
+      "filters": "筛选条件",
+      "filtersDesc": "按访客标识和在线状态过滤，并导出当前会话数据。",
+      "list": "访客列表",
+      "listDesc": "查看访客来源设备、区域、UA 与最后访问时间。"
+    },
     "search": "搜索访客",
     "statusFilter": "状态筛选",
     "all": "全部",

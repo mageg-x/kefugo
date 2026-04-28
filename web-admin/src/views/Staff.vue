@@ -1,59 +1,94 @@
 <template>
-  <div class="p-8">
-    <h1 class="text-2xl font-bold text-gray-800 mb-6">{{ t('pageStaff.title') }}</h1>
-
-    <div class="mb-6">
-      <el-button type="primary" @click="openAddDialog">
-        <template #icon>
-          <el-icon><Plus /></el-icon>
-        </template>
-        {{ t('pageStaff.addStaff') }}
-      </el-button>
-    </div>
-
-    <el-card v-loading="loading">
-      <div class="mb-4 flex gap-2">
-        <el-button type="success" :disabled="selectedIDs.length === 0" @click="batchSetActive(true)">
-          {{ t('pageStaff.batchEnable') }}
-        </el-button>
-        <el-button type="warning" :disabled="selectedIDs.length === 0" @click="batchSetActive(false)">
-          {{ t('pageStaff.batchDisable') }}
+  <div class="admin-console-page staff-console">
+    <div class="console-hero">
+      <div class="console-hero__copy">
+        <span class="console-kicker">{{ t("pageStaff.title") }}</span>
+        <h1>{{ t("pageStaff.title") }}</h1>
+        <p>{{ t("pageStaff.subtitle") }}</p>
+      </div>
+      <div class="console-hero__actions">
+        <el-button type="primary" class="hero-button" @click="fetchStaffList">{{ t("action.refresh") }}</el-button>
+        <el-button type="primary" class="hero-button" @click="openAddDialog">
+          <template #icon>
+            <el-icon><Plus /></el-icon>
+          </template>
+          {{ t("pageStaff.addStaff") }}
         </el-button>
       </div>
-      <el-table :data="staffList" stripe @selection-change="onSelectionChange">
-        <el-table-column type="selection" width="48" />
-        <el-table-column prop="id" label="ID" width="80" align="center" />
-        <el-table-column prop="name" :label="t('pageStaff.name')" align="center" />
-        <el-table-column prop="role" :label="t('pageStaff.role')" align="center">
-          <template #default="{ row }">
-            <el-tag :type="row.role === 'admin' ? 'danger' : 'primary'" size="small">
-              {{ row.role === 'admin' ? t('role.admin') : t('role.agent') }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="status" :label="t('pageStaff.status')" width="100" align="center">
-          <template #default="{ row }">
-            <el-tag :type="row.status === 'online' ? 'success' : 'info'" size="small">
-              {{ row.status === 'online' ? t('pageStaff.online') : t('pageStaff.offline') }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="sessions" :label="t('pageStaff.todaySessions')" width="100" align="center" />
-        <el-table-column prop="rating" :label="t('pageStaff.rating')" width="100" align="center">
-          <template #default="{ row }">
-            <el-rate v-model="row.rating" disabled show-score text-color="#ff9900" />
-          </template>
-        </el-table-column>
-        <el-table-column :label="t('pageStaff.actions')" width="200" align="center">
-          <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="handleEdit(row)">{{ t('pageStaff.edit') }}</el-button>
-            <el-button type="danger" link size="small" @click="handleDelete(row)">{{ t('pageStaff.delete') }}</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+    </div>
+
+    <div class="console-overview">
+      <article v-for="item in overviewCards" :key="item.key" class="overview-card" :class="item.tone">
+        <span class="overview-card__label">{{ item.label }}</span>
+        <strong class="overview-card__value">{{ item.value }}</strong>
+      </article>
+    </div>
+
+    <el-card class="console-panel action-panel" shadow="never">
+      <div class="panel-head">
+        <div>
+          <h2>{{ t("pageStaff.panel.actions") }}</h2>
+          <p>{{ t("pageStaff.panel.actionsDesc") }}</p>
+        </div>
+      </div>
+      <div class="action-row">
+        <el-button type="success" :disabled="selectedIDs.length === 0" @click="batchSetActive(true)">
+          {{ t("pageStaff.batchEnable") }}
+        </el-button>
+        <el-button type="warning" :disabled="selectedIDs.length === 0" @click="batchSetActive(false)">
+          {{ t("pageStaff.batchDisable") }}
+        </el-button>
+      </div>
     </el-card>
 
-    <el-dialog v-model="showAddDialog" :title="isEditMode ? t('pageStaff.dialogEdit') : t('pageStaff.dialogAdd')" width="500px">
+    <el-card class="console-panel table-panel" shadow="never" v-loading="loading">
+      <div class="panel-head panel-head--split">
+        <div>
+          <h2>{{ t("pageStaff.panel.list") }}</h2>
+          <p>{{ t("pageStaff.panel.listDesc") }}</p>
+        </div>
+        <div class="panel-badge">
+          <span>{{ staffList.length }}</span>
+          <small>AGENT</small>
+        </div>
+      </div>
+
+      <div class="table-shell">
+        <el-table :data="staffList" stripe class="admin-console-table" @selection-change="onSelectionChange">
+          <el-table-column type="selection" width="54" />
+          <el-table-column prop="id" label="ID" width="80" />
+          <el-table-column prop="name" :label="t('pageStaff.name')" min-width="140" />
+          <el-table-column prop="role" :label="t('pageStaff.role')" width="110">
+            <template #default="{ row }">
+              <el-tag :type="row.role === 'admin' ? 'danger' : 'primary'" size="small" effect="light">
+                {{ row.role === "admin" ? t("role.admin") : t("role.agent") }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="status" :label="t('pageStaff.status')" width="110">
+            <template #default="{ row }">
+              <el-tag :type="row.status === 'online' ? 'success' : 'info'" size="small" effect="light">
+                {{ row.status === "online" ? t("pageStaff.online") : t("pageStaff.offline") }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="sessions" :label="t('pageStaff.todaySessions')" width="120" />
+          <el-table-column prop="rating" :label="t('pageStaff.rating')" width="140">
+            <template #default="{ row }">
+              <el-rate v-model="row.rating" disabled show-score text-color="#ff9900" />
+            </template>
+          </el-table-column>
+          <el-table-column :label="t('pageStaff.actions')" width="180" fixed="right">
+            <template #default="{ row }">
+              <el-button type="primary" link size="small" @click="handleEdit(row)">{{ t("pageStaff.edit") }}</el-button>
+              <el-button type="danger" link size="small" @click="handleDelete(row)">{{ t("pageStaff.delete") }}</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </el-card>
+
+    <el-dialog v-model="showAddDialog" :title="isEditMode ? t('pageStaff.dialogEdit') : t('pageStaff.dialogAdd')" width="520px">
       <el-form :model="newStaff" label-width="80px">
         <el-form-item :label="t('pageStaff.username')" class="mr-8">
           <el-input v-model="newStaff.username" />
@@ -72,8 +107,8 @@
         </el-form-item>
         <el-form-item :label="t('pageStaff.active')" class="mr-8">
           <el-radio-group v-model="newStaff.active">
-            <el-radio :label="true">{{ t('pageStaff.enable') }}</el-radio>
-            <el-radio :label="false">{{ t('pageStaff.disable') }}</el-radio>
+            <el-radio :label="true">{{ t("pageStaff.enable") }}</el-radio>
+            <el-radio :label="false">{{ t("pageStaff.disable") }}</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item :label="t('pageStaff.serviceApps')" class="mr-8">
@@ -84,15 +119,15 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showAddDialog = false">{{ t('action.cancel') }}</el-button>
-        <el-button type="primary" @click="handleAdd">{{ t('action.confirm') }}</el-button>
+        <el-button @click="showAddDialog = false">{{ t("action.cancel") }}</el-button>
+        <el-button type="primary" @click="handleAdd">{{ t("action.confirm") }}</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { Plus } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import api from "../script/api.js";
@@ -114,6 +149,34 @@ const newStaff = ref({
 
 const staffList = ref([]);
 const selectedIDs = ref([]);
+
+const overviewCards = computed(() => {
+  const rows = staffList.value || [];
+  const onlineCount = rows.filter((item) => item.status === "online").length;
+  const adminCount = rows.filter((item) => item.role === "admin").length;
+  const sessionTotal = rows.reduce((sum, item) => sum + Number(item.sessions || 0), 0);
+  return [
+    { key: "in-view", label: t("pageStaff.overview.inView"), value: rows.length, tone: "" },
+    { key: "online", label: t("pageStaff.overview.online"), value: onlineCount, tone: "overview-card--success" },
+    { key: "admins", label: t("pageStaff.overview.admins"), value: adminCount, tone: "overview-card--warning" },
+    { key: "sessions", label: t("pageStaff.overview.sessions"), value: sessionTotal, tone: "overview-card--info" },
+  ];
+});
+
+const parseUserApps = (raw) => {
+  if (Array.isArray(raw)) {
+    return raw;
+  }
+  if (typeof raw !== "string" || !raw.trim()) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
 
 const fetchAppList = async () => {
   try {
@@ -146,7 +209,7 @@ const fetchStaffList = async () => {
         rating: Number(user.rating || 0),
         avatar: user.avatar || "",
         active: !!user.active,
-        apps: user.apps ? JSON.parse(user.apps) : [],
+        apps: parseUserApps(user.apps),
       }));
       selectedIDs.value = [];
     }

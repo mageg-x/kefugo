@@ -101,8 +101,6 @@ func (s *Session) MarkFollowUp() {
 		return
 	}
 	s.FollowUp = true
-	// 关键：清空已读时间，确保 badge 出现
-	s.LastAgentReadTime = 0
 }
 
 // 6. 关闭会话
