@@ -1,30 +1,42 @@
 <template>
-  <div class="p-8">
-    <h1 class="text-2xl font-bold text-gray-800 mb-6">{{ t('pageProfile.title') }}</h1>
+  <div class="admin-console-page profile-console">
+    <div class="console-hero">
+      <div class="console-hero__copy">
+        <span class="console-kicker">{{ t("pageProfile.title") }}</span>
+        <h1>{{ t("pageProfile.title") }}</h1>
+        <p>{{ t("pageProfile.subtitle") }}</p>
+      </div>
+    </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <el-card class="lg:col-span-1" v-loading="loading">
-        <div class="text-center">
-          <el-avatar :size="100" :src="userInfo.avatar">
+    <div class="console-overview">
+      <article class="overview-card overview-card--info">
+        <span class="overview-card__label">{{ t("pageProfile.overview.sessions") }}</span>
+        <strong class="overview-card__value">{{ profileSummary.sessions_today }}</strong>
+      </article>
+      <article class="overview-card overview-card--success">
+        <span class="overview-card__label">{{ t("pageProfile.overview.rating") }}</span>
+        <strong class="overview-card__value">{{ profileSummary.rating }}</strong>
+      </article>
+    </div>
+
+    <div class="profile-grid">
+      <el-card class="console-panel profile-summary-panel" shadow="never" v-loading="loading">
+        <div class="profile-summary">
+          <el-avatar :size="96" :src="userInfo.avatar" class="profile-avatar">
             {{ userInfo.name?.charAt(0) || "U" }}
           </el-avatar>
-          <h2 class="text-xl font-bold text-gray-800 mt-4">{{ userInfo.name }}</h2>
-          <p class="text-gray-500">{{ userInfo.role === "admin" ? t('role.admin') : t('pageProfile.roleAgent') }}</p>
-          <div class="flex justify-center gap-4 mt-4">
-            <div class="text-center">
-              <p class="text-2xl font-bold text-blue-600">{{ profileSummary.sessions_today }}</p>
-              <p class="text-sm text-gray-500">{{ t('pageProfile.todaySessions') }}</p>
-            </div>
-            <div class="text-center">
-              <p class="text-2xl font-bold text-green-600">{{ profileSummary.rating }}</p>
-              <p class="text-sm text-gray-500">{{ t('pageProfile.rating') }}</p>
-            </div>
-          </div>
+          <h2>{{ userInfo.name }}</h2>
+          <p>{{ userInfo.role === "admin" ? t("role.admin") : t("pageProfile.roleAgent") }}</p>
         </div>
       </el-card>
 
-      <el-card class="lg:col-span-2">
-        <template #header><span class="font-bold">{{ t('pageProfile.editProfile') }}</span></template>
+      <el-card class="console-panel" shadow="never">
+        <div class="panel-head">
+          <div>
+            <h2>{{ t("pageProfile.panel.profile") }}</h2>
+            <p>{{ t("pageProfile.panel.profileDesc") }}</p>
+          </div>
+        </div>
         <el-form :model="form" label-width="100px">
           <el-form-item :label="t('pageProfile.username')">
             <el-input v-model="form.username" disabled />
@@ -42,15 +54,20 @@
             <el-input v-model="form.bio" type="textarea" :rows="3" />
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" :loading="savingProfile" @click="saveProfile">{{ t('pageProfile.saveChanges') }}</el-button>
+            <el-button type="primary" :loading="savingProfile" @click="saveProfile">{{ t("pageProfile.saveChanges") }}</el-button>
           </el-form-item>
         </el-form>
       </el-card>
     </div>
 
-    <el-card class="mt-6">
-      <template #header><span class="font-bold">{{ t('pageProfile.changePassword') }}</span></template>
-      <el-form :model="passwordForm" label-width="100px">
+    <el-card class="console-panel" shadow="never">
+      <div class="panel-head">
+        <div>
+          <h2>{{ t("pageProfile.panel.security") }}</h2>
+          <p>{{ t("pageProfile.panel.securityDesc") }}</p>
+        </div>
+      </div>
+      <el-form :model="passwordForm" label-width="100px" class="password-form">
         <el-form-item :label="t('pageProfile.currentPassword')">
           <el-input v-model="passwordForm.currentPassword" type="password" show-password />
         </el-form-item>
@@ -61,7 +78,7 @@
           <el-input v-model="passwordForm.confirmPassword" type="password" show-password />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="savingPassword" @click="changePassword">{{ t('pageProfile.changePassword') }}</el-button>
+          <el-button type="primary" :loading="savingPassword" @click="changePassword">{{ t("pageProfile.changePassword") }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -175,3 +192,50 @@ async function changePassword() {
 
 onMounted(loadProfile);
 </script>
+
+<style scoped>
+.profile-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.profile-summary-panel {
+  align-self: start;
+}
+
+.profile-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.75rem;
+}
+
+.profile-avatar {
+  box-shadow: 0 18px 36px rgba(99, 102, 241, 0.18);
+}
+
+.profile-summary h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1.375rem;
+  font-weight: 700;
+}
+
+.profile-summary p {
+  margin: 0;
+  color: #64748b;
+}
+
+.password-form {
+  max-width: 720px;
+}
+
+@media (max-width: 900px) {
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

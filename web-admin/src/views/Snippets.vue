@@ -1,36 +1,62 @@
 <template>
-  <div class="p-8 snippets-page">
-    <div class="head">
-      <div>
-        <h1 class="page-title">{{ t('pageSnippets.title') }}</h1>
-        <p class="page-subtitle">{{ t('pageSnippets.subtitle') }}</p>
+  <div class="admin-console-page snippets-console">
+    <div class="console-hero">
+      <div class="console-hero__copy">
+        <span class="console-kicker">{{ t("pageSnippets.title") }}</span>
+        <h1>{{ t("pageSnippets.title") }}</h1>
+        <p>{{ t("pageSnippets.subtitle") }}</p>
       </div>
-      <el-button type="primary" @click="openCreateDialog">{{ t('pageSnippets.addSnippet') }}</el-button>
+      <div class="console-hero__actions">
+        <el-button type="primary" class="hero-button" @click="openCreateDialog">{{ t("pageSnippets.addSnippet") }}</el-button>
+      </div>
     </div>
 
-    <div class="snippet-filters">
-      <el-select v-model="categoryFilter" clearable :placeholder="t('pageSnippets.filterCategory')" @change="loadSnippets">
-        <el-option v-for="cat in categoryOptions" :key="cat" :label="cat" :value="cat" />
-      </el-select>
-    </div>
+    <el-card class="console-panel filter-panel" shadow="never">
+      <div class="panel-head">
+        <div>
+          <h2>{{ t("pageSnippets.panel.filters") }}</h2>
+          <p>{{ t("pageSnippets.panel.filtersDesc") }}</p>
+        </div>
+      </div>
+      <div class="filter-grid">
+        <el-select v-model="categoryFilter" clearable :placeholder="t('pageSnippets.filterCategory')" @change="loadSnippets">
+          <el-option v-for="cat in categoryOptions" :key="cat" :label="cat" :value="cat" />
+        </el-select>
+      </div>
+    </el-card>
 
-    <el-table :data="snippets" v-loading="loading" stripe>
-      <el-table-column prop="title" :label="t('pageSnippets.titleCol')" min-width="160" />
-      <el-table-column prop="category" :label="t('pageSnippets.category')" width="120">
-        <template #default="{ row }">
-          <el-tag>{{ row.category }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="content" :label="t('pageSnippets.content')" min-width="320" show-overflow-tooltip />
-      <el-table-column prop="usage_count" :label="t('pageSnippets.usageCount')" width="120" align="center" />
-      <el-table-column :label="t('pageSnippets.actions')" width="220" align="center">
-        <template #default="{ row }">
-          <el-button type="primary" link @click="useSnippet(row)">{{ t('pageSnippets.use') }}</el-button>
-          <el-button type="primary" link @click="openEditDialog(row)">{{ t('pageSnippets.edit') }}</el-button>
-          <el-button type="danger" link @click="removeSnippet(row)">{{ t('pageSnippets.delete') }}</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <el-card class="console-panel table-panel" shadow="never">
+      <div class="panel-head panel-head--split">
+        <div>
+          <h2>{{ t("pageSnippets.panel.list") }}</h2>
+          <p>{{ t("pageSnippets.panel.listDesc") }}</p>
+        </div>
+        <div class="panel-badge">
+          <span>{{ snippets.length }}</span>
+          <small>QA</small>
+        </div>
+      </div>
+
+      <div class="table-shell">
+        <el-table :data="snippets" v-loading="loading" stripe class="admin-console-table">
+          <el-table-column prop="title" :label="t('pageSnippets.titleCol')" min-width="180" />
+          <el-table-column prop="category" :label="t('pageSnippets.category')" width="140">
+            <template #default="{ row }">
+              <el-tag effect="light">{{ row.category }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="content" :label="t('pageSnippets.content')" min-width="360" show-overflow-tooltip />
+          <el-table-column prop="usage_count" :label="t('pageSnippets.usageCount')" width="120" align="center" />
+          <el-table-column :label="t('pageSnippets.actions')" width="220" align="center" fixed="right">
+            <template #default="{ row }">
+              <el-button type="primary" link @click="useSnippet(row)">{{ t("pageSnippets.use") }}</el-button>
+              <el-button type="primary" link @click="openEditDialog(row)">{{ t("pageSnippets.edit") }}</el-button>
+              <el-button type="danger" link @click="removeSnippet(row)">{{ t("pageSnippets.delete") }}</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </el-card>
 
     <el-dialog v-model="dialogVisible" :title="dialogMode === 'create' ? t('pageSnippets.dialogAdd') : t('pageSnippets.dialogEdit')" width="560px">
       <el-form :model="form" label-width="80px">
@@ -47,8 +73,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="dialogVisible = false">{{ t('pageSnippets.cancel') }}</el-button>
-        <el-button type="primary" :loading="saving" @click="saveSnippet">{{ t('pageSnippets.save') }}</el-button>
+        <el-button @click="dialogVisible = false">{{ t("pageSnippets.cancel") }}</el-button>
+        <el-button type="primary" :loading="saving" @click="saveSnippet">{{ t("pageSnippets.save") }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -169,34 +195,3 @@ onMounted(() => {
   loadSnippets();
 });
 </script>
-
-<style scoped>
-.head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.head h1 {
-  margin: 0;
-}
-
-.page-title {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 700;
-  color: #1f2937;
-}
-
-.page-subtitle {
-  margin: 4px 0 0;
-  font-size: 13px;
-  font-weight: 400;
-  color: #6b7280;
-}
-
-.snippet-filters {
-  margin-bottom: 12px;
-}
-</style>

@@ -219,7 +219,7 @@
               </header>
               <div class="emoji-panel">
                 <section v-for="group in emojiGroups" :key="group.label" class="emoji-group">
-                  <p class="emoji-group-title">{{ group.label }}</p>
+                  <p :class="['emoji-group-title', `emoji-group-title--${group.label.toLowerCase()}`]">{{ group.label }}</p>
                   <div class="emoji-grid">
                     <button v-for="emoji in group.items" :key="group.label + emoji" type="button" class="emoji-btn"
                       @click="appendEmoji(emoji)">
@@ -900,11 +900,53 @@ function appendMessage(msg) {
   nextTick(scrollToBottom);
 }
 
-function updateLocalMessageStatus(localId, status) {
+function patchLocalMessage(localId, patch) {
   const idx = messages.value.findIndex((m) => m.local_id === localId);
-  if (idx >= 0) {
-    messages.value[idx].status = status;
+  if (idx < 0) return null;
+  const current = messages.value[idx];
+  const next = typeof patch === "function" ? patch(current) : { ...current, ...patch };
+  messages.value[idx] = next;
+  return next;
+}
+
+function updateLocalMessageStatus(localId, status) {
+  patchLocalMessage(localId, { status });
+}
+
+function applySessionPreview(sid, message) {
+  if (!sid || !message) return;
+  const previewText = toInboxDisplayText(message);
+  const previewType = message.content_type;
+  const idx = sessions.value.findIndex((s) => s.sid === sid);
+  if (idx < 0) {
+    void reloadSessions();
+  } else {
+    sessions.value[idx].last_message = previewText;
+    sessions.value[idx].last_message_type = previewType;
   }
+  if (selectedSession.value?.sid === sid) {
+    selectedSession.value.last_message = previewText;
+    selectedSession.value.last_message_type = previewType;
+  }
+}
+
+function markOutgoingMessagePending(localId, clientId, timeoutMs = 10000) {
+  patchLocalMessage(localId, {
+    client_id: clientId,
+    status: UI_MESSAGE_STATUS.SENDING,
+  });
+  scheduleMarkFailed(localId, timeoutMs);
+}
+
+function reconcileDeliveredOutgoingMessage(localId, mapped, clientId = "") {
+  clearRetryTimer(localId);
+  patchLocalMessage(localId, (current) => ({
+    ...current,
+    ...mapped,
+    local_id: current.local_id,
+    client_id: clientId || current.client_id,
+    status: UI_MESSAGE_STATUS.SENT,
+  }));
 }
 
 function scheduleMarkFailed(localId, timeoutMs = 10000) {
@@ -954,10 +996,8 @@ function sendText(text) {
     { content, clientId, replyTo: currentReply }
   );
   replyTo.value = null;
-  const ok = Boolean(result?.ok);
-  updateLocalMessageStatus(localId, ok ? UI_MESSAGE_STATUS.SENT : UI_MESSAGE_STATUS.SENDING);
-  if (!ok) scheduleMarkFailed(localId);
-  else clearRetryTimer(localId);
+  const dispatchedClientId = String(result?.clientId || clientId).trim() || clientId;
+  markOutgoingMessagePending(localId, dispatchedClientId);
 }
 
 function handleInputKeydown(event) {
@@ -1138,6 +1178,7 @@ async function sendFileMessage(file) {
   if (!file || !selectedSession.value || !canSend()) return;
   const previewUrl = URL.createObjectURL(file);
   const localId = createLocalId("out");
+  const clientId = createLocalId("cid");
   const contentType = detectContentType(file);
   const currentReply = replyTo.value ? { ...replyTo.value } : null;
   appendMessage({
@@ -1153,6 +1194,7 @@ async function sendFileMessage(file) {
       { sid: selectedSession.value.sid, localId, currentUserName: currentUserName.value }
     ),
     status: UI_MESSAGE_STATUS.SENDING,
+    client_id: clientId,
   });
 
   try {
@@ -1173,45 +1215,31 @@ async function sendFileMessage(file) {
       }
     }
 
-    let ok = false;
-    const clientId = createLocalId("cid");
     if (contentType === BUSINESS_CONTENT_TYPES.IMAGE) {
-      ok = Boolean(
-        wsClient.value?.sendPayload(selectedSession.value.sid, BUSINESS_CONTENT_TYPES.IMAGE, {
-          url: remoteUrl,
-          name: uploaded.name || file.name,
-          clientId,
-          replyTo: currentReply,
-        })?.ok
-      );
+      wsClient.value?.sendPayload(selectedSession.value.sid, BUSINESS_CONTENT_TYPES.IMAGE, {
+        url: remoteUrl,
+        name: uploaded.name || file.name,
+        clientId,
+        replyTo: currentReply,
+      });
     } else if (contentType === BUSINESS_CONTENT_TYPES.AUDIO) {
-      ok = Boolean(
-        wsClient.value?.sendPayload(selectedSession.value.sid, BUSINESS_CONTENT_TYPES.AUDIO, {
-          url: remoteUrl,
-          duration: 0,
-          clientId,
-          replyTo: currentReply,
-        })?.ok
-      );
+      wsClient.value?.sendPayload(selectedSession.value.sid, BUSINESS_CONTENT_TYPES.AUDIO, {
+        url: remoteUrl,
+        duration: 0,
+        clientId,
+        replyTo: currentReply,
+      });
     } else {
-      ok = Boolean(
-        wsClient.value?.sendPayload(selectedSession.value.sid, BUSINESS_CONTENT_TYPES.FILE, {
-          url: remoteUrl,
-          name: uploaded.name || file.name,
-          size: Number(uploaded.size || file.size || 0),
-          clientId,
-          replyTo: currentReply,
-        })?.ok
-      );
+      wsClient.value?.sendPayload(selectedSession.value.sid, BUSINESS_CONTENT_TYPES.FILE, {
+        url: remoteUrl,
+        name: uploaded.name || file.name,
+        size: Number(uploaded.size || file.size || 0),
+        clientId,
+        replyTo: currentReply,
+      });
     }
 
-    if (!ok) {
-      updateLocalMessageStatus(localId, UI_MESSAGE_STATUS.SENDING);
-      scheduleMarkFailed(localId);
-    } else {
-      updateLocalMessageStatus(localId, UI_MESSAGE_STATUS.SENT);
-      clearRetryTimer(localId);
-    }
+    markOutgoingMessagePending(localId, clientId);
     replyTo.value = null;
   } catch (error) {
     updateLocalMessageStatus(localId, UI_MESSAGE_STATUS.FAILED);
@@ -1248,55 +1276,40 @@ function handleSenderPaste(event) {
 
 function retryMessage(msg) {
   if (!selectedSession.value || !msg || !msg.local_id) return;
-  updateLocalMessageStatus(msg.local_id, UI_MESSAGE_STATUS.SENDING);
   const retryReplyTo = msg.replyTo || null;
 
-  let ok = false;
   const clientId = createLocalId("cid");
   if (msg.content_type === BUSINESS_CONTENT_TYPES.IMAGE) {
-    ok = Boolean(
-      wsClient.value?.sendPayload(selectedSession.value.sid, BUSINESS_CONTENT_TYPES.IMAGE, {
-        url: msg.url || msg.content,
-        name: msg.name || "image.jpg",
-        clientId,
-        replyTo: retryReplyTo,
-      })?.ok
-    );
+    wsClient.value?.sendPayload(selectedSession.value.sid, BUSINESS_CONTENT_TYPES.IMAGE, {
+      url: msg.url || msg.content,
+      name: msg.name || "image.jpg",
+      clientId,
+      replyTo: retryReplyTo,
+    });
   } else if (msg.content_type === BUSINESS_CONTENT_TYPES.AUDIO) {
-    ok = Boolean(
-      wsClient.value?.sendPayload(selectedSession.value.sid, BUSINESS_CONTENT_TYPES.AUDIO, {
-        url: msg.url || msg.content,
-        duration: Number(msg.duration || 0),
-        clientId,
-        replyTo: retryReplyTo,
-      })?.ok
-    );
+    wsClient.value?.sendPayload(selectedSession.value.sid, BUSINESS_CONTENT_TYPES.AUDIO, {
+      url: msg.url || msg.content,
+      duration: Number(msg.duration || 0),
+      clientId,
+      replyTo: retryReplyTo,
+    });
   } else if (msg.content_type === BUSINESS_CONTENT_TYPES.FILE) {
-    ok = Boolean(
-      wsClient.value?.sendPayload(selectedSession.value.sid, BUSINESS_CONTENT_TYPES.FILE, {
-        url: msg.url || msg.content,
-        name: msg.name || "file",
-        size: Number(msg.size || 0),
-        clientId,
-        replyTo: retryReplyTo,
-      })?.ok
-    );
+    wsClient.value?.sendPayload(selectedSession.value.sid, BUSINESS_CONTENT_TYPES.FILE, {
+      url: msg.url || msg.content,
+      name: msg.name || "file",
+      size: Number(msg.size || 0),
+      clientId,
+      replyTo: retryReplyTo,
+    });
   } else {
-    ok = Boolean(
-      wsClient.value?.sendPayload(selectedSession.value.sid, BUSINESS_CONTENT_TYPES.TEXT, {
-        content: msg.content || "",
-        clientId,
-        replyTo: retryReplyTo,
-      })?.ok
-    );
+    wsClient.value?.sendPayload(selectedSession.value.sid, BUSINESS_CONTENT_TYPES.TEXT, {
+      content: msg.content || "",
+      clientId,
+      replyTo: retryReplyTo,
+    });
   }
 
-  if (!ok) {
-    scheduleMarkFailed(msg.local_id);
-  } else {
-    updateLocalMessageStatus(msg.local_id, UI_MESSAGE_STATUS.SENT);
-    clearRetryTimer(msg.local_id);
-  }
+  markOutgoingMessagePending(msg.local_id, clientId);
 }
 
 function bindAudio(msg, el) {
@@ -1330,6 +1343,7 @@ async function uploadVoiceBlob(blob, mimeType) {
   const previewURL = URL.createObjectURL(blob);
   const duration = Math.max((Date.now() - recordingStartAtRef.value) / 1000, await readAudioDurationFromURL(previewURL));
   const localId = createLocalId("out");
+  const clientId = createLocalId("cid");
   const currentReply = replyTo.value ? { ...replyTo.value } : null;
   appendMessage({
     ...normalizeMessageMediaFields(buildInboxUiMessageFromOutgoing(
@@ -1338,32 +1352,25 @@ async function uploadVoiceBlob(blob, mimeType) {
       { sid: selectedSession.value.sid, localId, currentUserName: currentUserName.value }
     )),
     status: UI_MESSAGE_STATUS.SENDING,
+    client_id: clientId,
   });
 
   try {
     const uploaded = await uploadPickedFile(file, BUSINESS_CONTENT_TYPES.AUDIO);
     const remoteUrl = toAbsoluteMediaURL(uploaded.url);
-    const clientId = createLocalId("cid");
     const idx = messages.value.findIndex((m) => m.local_id === localId);
     if (idx >= 0) {
       messages.value[idx].url = remoteUrl;
       messages.value[idx].content = remoteUrl;
       messages.value[idx].duration = Number(duration || 0);
     }
-    const ok = Boolean(
-      wsClient.value?.sendPayload(selectedSession.value.sid, BUSINESS_CONTENT_TYPES.AUDIO, {
-        url: remoteUrl,
-        duration: Number(duration || 0),
-        clientId,
-        replyTo: currentReply,
-      })?.ok
-    );
-    if (!ok) {
-      scheduleMarkFailed(localId);
-    } else {
-      updateLocalMessageStatus(localId, UI_MESSAGE_STATUS.SENT);
-      clearRetryTimer(localId);
-    }
+    wsClient.value?.sendPayload(selectedSession.value.sid, BUSINESS_CONTENT_TYPES.AUDIO, {
+      url: remoteUrl,
+      duration: Number(duration || 0),
+      clientId,
+      replyTo: currentReply,
+    });
+    markOutgoingMessagePending(localId, clientId);
     replyTo.value = null;
   } catch (error) {
     updateLocalMessageStatus(localId, UI_MESSAGE_STATUS.FAILED);
@@ -1771,7 +1778,7 @@ function onIncomingMessage(message) {
   if (mapped.business_type === BUSINESS_MESSAGE_TYPES.AGENT && mapped.isSelf) {
     for (let i = messages.value.length - 1; i >= 0; i--) {
       const local = messages.value[i];
-      if (!local || !local.isSelf || local.msg_id || local.status !== UI_MESSAGE_STATUS.SENDING) {
+      if (!local || !local.isSelf || local.msg_id || local.status === UI_MESSAGE_STATUS.SENT) {
         continue;
       }
       const localComparable = String(
@@ -1782,11 +1789,15 @@ function onIncomingMessage(message) {
       ).trim();
       if (
         (payloadClientID && local.client_id === payloadClientID) ||
-        (local.content_type === mapped.content_type && localComparable && localComparable === mappedComparable)
+        (
+          local.status === UI_MESSAGE_STATUS.SENDING &&
+          local.content_type === mapped.content_type &&
+          localComparable &&
+          localComparable === mappedComparable
+        )
       ) {
-        local.status = UI_MESSAGE_STATUS.SENT;
-        local.msg_id = mapped.msg_id || local.msg_id;
-        clearRetryTimer(local.local_id);
+        reconcileDeliveredOutgoingMessage(local.local_id, mapped, payloadClientID);
+        applySessionPreview(sid, mapped);
         return;
       }
     }
@@ -1798,8 +1809,7 @@ function onIncomingMessage(message) {
     void reloadSessions();
   }
   if (idx >= 0) {
-    sessions.value[idx].last_message = toInboxDisplayText(mapped);
-    sessions.value[idx].last_message_type = mapped.content_type;
+    applySessionPreview(sid, mapped);
     if (mapped.business_type === BUSINESS_MESSAGE_TYPES.VISITOR && selectedSession.value?.sid !== sid) {
       sessions.value[idx].unread_count = Number(sessions.value[idx].unread_count || 0) + 1;
     }
@@ -1815,25 +1825,6 @@ function onIncomingMessage(message) {
   if (mapped.business_type === BUSINESS_MESSAGE_TYPES.VISITOR && selectedSession.value?.sid !== sid) {
     maybePlaySound();
     maybeDesktopNotify(sid, mapped);
-  }
-
-  if (mapped.business_type === BUSINESS_MESSAGE_TYPES.AGENT && mapped.isSelf) {
-    for (let i = messages.value.length - 1; i >= 0; i--) {
-      const local = messages.value[i];
-      if (
-        !local.msg_id &&
-        local.isSelf &&
-        local.status === UI_MESSAGE_STATUS.SENDING &&
-        (
-          (payloadClientID && local.client_id === payloadClientID) ||
-          (local.content_type === mapped.content_type && local.content === mapped.content)
-        )
-      ) {
-        local.status = UI_MESSAGE_STATUS.SENT;
-        clearRetryTimer(local.local_id);
-        break;
-      }
-    }
   }
 }
 
@@ -3113,8 +3104,34 @@ onBeforeUnmount(() => {
 
 .emoji-group-title {
   margin: 0;
-  font-size: 11px;
-  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.5rem 0.5rem 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.emoji-group-title--common {
+  color: #6366f1;
+  background: #eef2ff;
+  border-bottom: 2px solid #6366f1;
+}
+
+.emoji-group-title--gestures {
+  color: #0891b2;
+  background: #ecfeff;
+  border-bottom: 2px solid #0891b2;
+}
+
+.emoji-group-title--symbols {
+  color: #be185d;
+  background: #fdf2f8;
+  border-bottom: 2px solid #be185d;
 }
 
 .emoji-grid {

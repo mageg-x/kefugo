@@ -59,6 +59,7 @@
     "rememberPassword": "Remember password",
     "loginButton": "Sign In",
     "studioFooter": "Magic Space Software Studio | Business Support System",
+    "copyright": "© 2026 ZeroVpn. All rights reserved.",
     "enterAccountAndPassword": "Please enter account and password"
   },
   "pageDashboard": {
@@ -69,8 +70,10 @@
     "pending": "Pending",
     "onlineAgents": "Online Agents",
     "activeSessions": "In Progress",
+    "inProgress": "In Progress",
     "totalSessions": "Total Sessions",
     "recentSessions": "Recent Sessions",
+    "recentSubtitle": "Review the latest customer conversations",
     "exportCsv": "Export CSV",
     "sessionId": "Session ID",
     "visitor": "Visitor",
@@ -297,6 +300,17 @@
   },
   "pageProfile": {
     "title": "Profile",
+    "subtitle": "Review your profile, daily work stats, and account security",
+    "overview": {
+      "sessions": "Today's Sessions",
+      "rating": "Current Rating"
+    },
+    "panel": {
+      "profile": "Profile Settings",
+      "profileDesc": "Maintain avatar, email, phone number, and bio.",
+      "security": "Account Security",
+      "securityDesc": "Update your current password and improve login safety."
+    },
     "roleAgent": "Support Agent",
     "todaySessions": "Today's Sessions",
     "rating": "Rating",
@@ -323,6 +337,12 @@
   "pageSnippets": {
     "title": "Quick Replies",
     "subtitle": "Manage personal frequently used replies",
+    "panel": {
+      "filters": "Filters",
+      "filtersDesc": "Locate commonly used replies by category for faster maintenance and reuse.",
+      "list": "Quick Reply List",
+      "listDesc": "Review title, category, content, and usage count, then edit or insert directly."
+    },
     "addSnippet": "Add Quick Reply",
     "filterCategory": "Filter category",
     "titleCol": "Title",
@@ -665,6 +685,7 @@
       "botName": "Bot name",
       "botNamePlaceholder": "e.g. Support Bot",
       "model": "Model",
+      "modelHint": "Only the chat model is selected here. Embedding and reranking still use the global knowledge-base model config.",
       "modelPlaceholder": "Use enabled model by default",
       "triggerScope": "Trigger scope",
       "unassignedOnly": "Unassigned sessions only",
@@ -701,6 +722,8 @@
       "tags": "Tags",
       "source": "Source",
       "sourceFile": "Source File",
+      "keyId": "Key ID",
+      "secretMasked": "Secret",
       "score": "Score",
       "hitDoc": "Matched Doc",
       "hitSegment": "Matched Segment",

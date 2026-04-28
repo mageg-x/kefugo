@@ -2,7 +2,7 @@
   <div class="dashboard-container p-8">
     <div class="dashboard-header mb-8">
       <h1 class="text-page-title">{{ t("pageDashboard.title") }}</h1>
-      <p class="text-secondary mt-2">{{ t("pageDashboard.subtitle") || "Monitor your customer service performance" }}</p>
+      <p class="text-secondary mt-2">{{ t("pageDashboard.subtitle") }}</p>
     </div>
 
     <div class="grid grid-cols-1 gap-5 mb-8 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -90,7 +90,7 @@
         <div class="recent-card__header">
           <div>
             <h2 class="text-card-title">{{ t("pageDashboard.recentSessions") }}</h2>
-            <p class="text-tertiary mt-1">Latest customer conversations</p>
+            <p class="text-tertiary mt-1">{{ t("pageDashboard.recentSubtitle") }}</p>
           </div>
           <el-button type="primary" size="default" class="export-btn" @click="downloadSessions">
             <template #icon>
@@ -147,7 +147,7 @@ function statusLabel(status) {
     unassigned: t("pageDashboard.unassigned"),
     unread: t("pageDashboard.unread"),
     unreply: t("pageDashboard.pendingReply"),
-    assigned: t("pageDashboard.activeSessions"),
+    assigned: t("pageDashboard.inProgress"),
     follow: t("pageDashboard.pendingFollow"),
     closed: t("pageDashboard.closed"),
   };

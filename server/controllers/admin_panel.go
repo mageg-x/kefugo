@@ -108,11 +108,12 @@ func (ac *AdminPanelController) Dashboard(c *gin.Context) {
 			todaySessions++
 		}
 		status := session.Status()
-		if status == models.SessionStatusClosed {
+		switch status {
+		case models.SessionStatusClosed:
 			resolvedSessions++
-		} else if status == models.SessionStatusAssigned {
+		case models.SessionStatusAssigned, models.SessionStatusFollowUP:
 			activeSessions++
-		} else {
+		default:
 			pendingSessions++
 		}
 

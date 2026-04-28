@@ -101,7 +101,7 @@
               :value="item.value"
             />
           </el-select>
-          <div class="setting-hint">仅选择聊天模型；向量化与重排使用知识库中的全局模型配置。</div>
+          <div class="setting-hint">{{ t("pageMore.ai.modelHint") }}</div>
         </el-form-item>
         <el-form-item :label="t('pageMore.ai.triggerScope')">
           <el-select v-model="aiConfig.whenAssigned">
@@ -231,8 +231,8 @@
         <section class="workspace-main">
           <el-table :data="apiKeyRows" v-loading="apiKeyLoading" border class="more-table">
             <el-table-column prop="name" :label="t('name')" min-width="180" />
-            <el-table-column prop="key_id" label="Key ID" min-width="220" />
-            <el-table-column prop="secret_masked" label="Secret" min-width="180" />
+            <el-table-column prop="key_id" :label="t('pageMore.table.keyId')" min-width="220" />
+            <el-table-column prop="secret_masked" :label="t('pageMore.table.secretMasked')" min-width="180" />
             <el-table-column prop="enabled" :label="t('status.label')" width="90" align="center">
               <template #default="{ row }">
                 <el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? t("status.enabled") : t("status.disabled") }}</el-tag>

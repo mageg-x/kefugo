@@ -96,7 +96,7 @@
         <!-- Footer -->
         <div class="absolute bottom-4 left-0 right-0 text-center text-xs z-40 drop-shadow-md animate-pulse">
             {{ t('pageLogin.studioFooter') }}
-            <p class="mt-1.5 bg-clip-text text-transparent bg-gradient-to-r from-gray-100 to-gray-900 drop-shadow-sm">&copy; 2026 ZeroVpn. All rights reserved.</p>
+            <p class="mt-1.5 bg-clip-text text-transparent bg-gradient-to-r from-gray-100 to-gray-900 drop-shadow-sm">{{ t('pageLogin.copyright') }}</p>
         </div>
     </div>
 </template>

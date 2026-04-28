@@ -59,6 +59,7 @@
     "rememberPassword": "记住密码",
     "loginButton": "登录",
     "studioFooter": "魔力空间软件技术工作室 | 商业版 客服系统",
+    "copyright": "© 2026 ZeroVpn. All rights reserved.",
     "enterAccountAndPassword": "请输入账号和密码"
   },
   "pageDashboard": {
@@ -69,8 +70,10 @@
     "pending": "待处理",
     "onlineAgents": "在线客服",
     "activeSessions": "进行中",
+    "inProgress": "进行中",
     "totalSessions": "累计会话",
     "recentSessions": "最近会话",
+    "recentSubtitle": "查看最近客户会话动态",
     "exportCsv": "导出CSV",
     "sessionId": "会话ID",
     "visitor": "访客",
@@ -297,6 +300,17 @@
   },
   "pageProfile": {
     "title": "个人资料",
+    "subtitle": "查看个人资料、当日工作数据并维护账号安全",
+    "overview": {
+      "sessions": "今日会话",
+      "rating": "当前评分"
+    },
+    "panel": {
+      "profile": "资料设置",
+      "profileDesc": "维护头像、邮箱、手机号与个性签名。",
+      "security": "账号安全",
+      "securityDesc": "更新当前账号密码，提升登录安全性。"
+    },
     "roleAgent": "客服专员",
     "todaySessions": "今日会话",
     "rating": "评分",
@@ -323,6 +337,12 @@
   "pageSnippets": {
     "title": "快捷回复",
     "subtitle": "个人常用话术管理",
+    "panel": {
+      "filters": "筛选条件",
+      "filtersDesc": "按分类快速定位常用话术，便于维护和复用。",
+      "list": "快捷回复列表",
+      "listDesc": "查看标题、分类、内容和使用次数，直接执行编辑或插入。"
+    },
     "addSnippet": "新增快捷回复",
     "filterCategory": "筛选分类",
     "titleCol": "标题",
@@ -667,6 +687,7 @@
       "botName": "机器人名称",
       "botNamePlaceholder": "例如：客服机器人",
       "model": "模型",
+      "modelHint": "仅选择聊天模型；向量化与重排使用知识库中的全局模型配置。",
       "modelPlaceholder": "默认使用已启用模型",
       "triggerScope": "触发范围",
       "unassignedOnly": "仅未分配会话",
@@ -703,6 +724,8 @@
       "tags": "标签",
       "source": "来源",
       "sourceFile": "来源文件",
+      "keyId": "Key ID",
+      "secretMasked": "Secret",
       "score": "分数",
       "hitDoc": "命中文档",
       "hitSegment": "命中片段",
