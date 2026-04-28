@@ -249,8 +249,18 @@ class ApiService {
     })
   }
 
-  async rateSession(sid, score, comment = '') {
-    return this.api.post('/sessions/rate', { sid, score, comment })
+  async rateSession(payloadOrSID, score, comment = '') {
+    const payload = typeof payloadOrSID === 'object' && payloadOrSID !== null
+      ? payloadOrSID
+      : { sid: payloadOrSID, score, comment }
+
+    return this.api.post('/sessions/rate', {
+      sid: payload.sid,
+      app_id: payload.app_id || payload.appId || '',
+      visitor_id: payload.visitor_id || payload.visitorId || '',
+      score: payload.score,
+      comment: payload.comment || ''
+    })
   }
 
   async uploadFile(appId, file, contentType = '') {

@@ -5,7 +5,7 @@
         <img :src="chatLogo" alt="logo" class="kefu-chat-logo" />
         <div class="kefu-chat-meta">
           <h1 class="kefu-chat-title">{{ chatTitle }}</h1>
-          <p class="kefu-chat-subtitle">独立聊天页</p>
+          <p class="kefu-chat-subtitle">{{ t("chat.standalonePage") }}</p>
         </div>
       </div>
     </header>
@@ -28,6 +28,7 @@
 import { computed, ref } from "vue";
 import TdChatCore from "./TdChatCore.vue";
 import { getChatInitOptionsFromQuery } from "../script/chat-runtime.js";
+import { t } from "../script/i18n.js";
 
 const initOptions = getChatInitOptionsFromQuery("default");
 const appId = ref(initOptions.appId || "default");
@@ -37,7 +38,7 @@ const wsUrl = ref(initOptions.wsUrl || "");
 const configName = ref("");
 const configLogo = ref("");
 
-const chatTitle = computed(() => configName.value || "零点客服");
+const chatTitle = computed(() => configName.value || t("app.zeroSupport"));
 const chatLogo = computed(() => configLogo.value || "./logo.png");
 
 function handleConfigLoaded(config) {

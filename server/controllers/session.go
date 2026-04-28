@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -21,6 +22,15 @@ import (
 // SessionController 提供会话列表、消息查询、接待、转接、关闭、已读、评分等接口
 // 这些接口主要供客服工作台和管理后台使用
 type SessionController struct{}
+
+var (
+	errSessionAccessDenied   = errors.New("session access denied")
+	errSessionClosedState    = errors.New("session closed")
+	errSessionAlreadyTaken   = errors.New("session already assigned")
+	errSessionOwnerMismatch  = errors.New("session owner mismatch")
+	errSessionAlreadyRated   = errors.New("session already rated")
+	errSessionInvalidRating  = errors.New("session rating invalid")
+)
 
 // sessionListItem 会话列表项数据结构
 // 用于API响应返回，包含会话的核心信息和状态
@@ -561,38 +571,46 @@ func (sc *SessionController) Accept(c *gin.Context) {
 
 	// 获取会话
 	ss := service.GetSessionService()
-	session, err := ss.GetSession(req.SID)
-	if err != nil || session == nil {
-		logger.Errorf("session accept target not found sid=%s err=%v", req.SID, err)
-		response.ResponseError(c, http.StatusNotFound, response.ErrCodeSessionNotFound)
-		return
-	}
-
-	// 权限检查：客服只能接待自己应用下的会话
-	if !sc.ensureAgentCanAccessSession(userName, session) {
-		logger.Errorf("session accept access denied user=%s sid=%s", userName, req.SID)
-		response.ResponseError(c, http.StatusForbidden, response.ErrCodeSessionAccessDenied)
-		return
-	}
-
-	// 业务规则检查：会话已关闭
-	if session.Closed {
-		logger.Errorf("session accept closed sid=%s", req.SID)
-		response.ResponseErrorWithMsg(c, http.StatusBadRequest, response.ErrCodeSessionClosed, "session closed")
-		return
-	}
-
-	// 业务规则检查：会话已被其他客服接待
-	if session.CurAgentID != "" && session.CurAgentID != userName {
-		logger.Errorf("session accept already assigned sid=%s owner=%s user=%s", req.SID, session.CurAgentID, userName)
-		response.ResponseErrorWithMsg(c, http.StatusConflict, response.ErrCodeSessionAlreadyAssigned, "already assigned")
+	if ss == nil {
+		logger.Errorf("session accept service unavailable sid=%s", req.SID)
+		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeSessionServiceUnavailable)
 		return
 	}
 
 	// 执行接待：分配客服给会话
 	now := time.Now().Unix()
-	session.AssignAgent(userName, now)
-	if err := ss.SaveSession(session); err != nil {
+	session, err := ss.UpdateSession(req.SID, func(s *models.Session) error {
+		if !sc.ensureAgentCanAccessSession(userName, s) {
+			return errSessionAccessDenied
+		}
+		if s.Closed {
+			return errSessionClosedState
+		}
+		if s.CurAgentID != "" && s.CurAgentID != userName {
+			return errSessionAlreadyTaken
+		}
+		s.AssignAgent(userName, now)
+		return nil
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, errSessionAccessDenied):
+			logger.Errorf("session accept access denied user=%s sid=%s", userName, req.SID)
+			response.ResponseError(c, http.StatusForbidden, response.ErrCodeSessionAccessDenied)
+		case errors.Is(err, errSessionClosedState):
+			logger.Errorf("session accept closed sid=%s", req.SID)
+			response.ResponseErrorWithMsg(c, http.StatusBadRequest, response.ErrCodeSessionClosed, "session closed")
+		case errors.Is(err, errSessionAlreadyTaken):
+			logger.Errorf("session accept already assigned sid=%s user=%s", req.SID, userName)
+			response.ResponseErrorWithMsg(c, http.StatusConflict, response.ErrCodeSessionAlreadyAssigned, "already assigned")
+		default:
+			logger.Errorf("session accept save failed sid=%s user=%s err=%v", req.SID, userName, err)
+			response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeSessionAcceptFailed)
+		}
+		return
+	}
+
+	if session == nil {
 		logger.Errorf("session accept save failed sid=%s user=%s err=%v", req.SID, userName, err)
 		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeSessionAcceptFailed)
 		return
@@ -632,6 +650,11 @@ func (sc *SessionController) Transfer(c *gin.Context) {
 
 	// 获取会话
 	ss := service.GetSessionService()
+	if ss == nil {
+		logger.Errorf("session transfer service unavailable user=%s sid=%s", userName, req.SID)
+		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeSessionServiceUnavailable)
+		return
+	}
 	session, err := ss.GetSession(req.SID)
 	if err != nil || session == nil {
 		logger.Errorf("session transfer target not found sid=%s err=%v", req.SID, err)
@@ -669,10 +692,34 @@ func (sc *SessionController) Transfer(c *gin.Context) {
 
 	// 执行转接
 	now := time.Now().Unix()
-	session.AssignAgent(req.ToAgentName, now)
-	if err := ss.SaveSession(session); err != nil {
-		logger.Errorf("session transfer save failed sid=%s from=%s to=%s err=%v", req.SID, userName, req.ToAgentName, err)
-		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeSessionTransferFailed)
+	session, err = ss.UpdateSession(req.SID, func(s *models.Session) error {
+		if !sc.ensureAgentCanAccessSession(userName, s) {
+			return errSessionAccessDenied
+		}
+		if s.Closed {
+			return errSessionClosedState
+		}
+		if s.CurAgentID != userName {
+			return errSessionOwnerMismatch
+		}
+		s.AssignAgent(req.ToAgentName, now)
+		return nil
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, errSessionAccessDenied):
+			logger.Errorf("session transfer access denied user=%s sid=%s", userName, req.SID)
+			response.ResponseError(c, http.StatusForbidden, response.ErrCodeSessionAccessDenied)
+		case errors.Is(err, errSessionClosedState):
+			logger.Errorf("session transfer rejected closed sid=%s", req.SID)
+			response.ResponseErrorWithMsg(c, http.StatusBadRequest, response.ErrCodeSessionClosed, "session closed")
+		case errors.Is(err, errSessionOwnerMismatch):
+			logger.Errorf("session transfer owner mismatch sid=%s user=%s", req.SID, userName)
+			response.ResponseError(c, http.StatusForbidden, response.ErrCodeSessionOwnerMismatch)
+		default:
+			logger.Errorf("session transfer save failed sid=%s from=%s to=%s err=%v", req.SID, userName, req.ToAgentName, err)
+			response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeSessionTransferFailed)
+		}
 		return
 	}
 
@@ -717,33 +764,44 @@ func (sc *SessionController) Close(c *gin.Context) {
 
 	// 获取会话
 	ss := service.GetSessionService()
-	session, err := ss.GetSession(req.SID)
-	if err != nil || session == nil {
-		logger.Errorf("session close target not found sid=%s err=%v", req.SID, err)
-		response.ResponseError(c, http.StatusNotFound, response.ErrCodeSessionNotFound)
-		return
-	}
-
-	// 权限检查
-	if !sc.ensureAgentCanAccessSession(userName, session) {
-		logger.Errorf("session close access denied user=%s sid=%s", userName, req.SID)
-		response.ResponseError(c, http.StatusForbidden, response.ErrCodeSessionAccessDenied)
+	if ss == nil {
+		logger.Errorf("session close service unavailable user=%s sid=%s", userName, req.SID)
+		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeSessionServiceUnavailable)
 		return
 	}
 
 	// 业务规则：普通客服只能关闭自己负责的会话，管理员可以关闭任意会话
 	isAdmin := role == "admin"
-	if !isAdmin && session.CurAgentID != userName {
-		logger.Errorf("session close owner mismatch sid=%s owner=%s user=%s", req.SID, session.CurAgentID, userName)
-		response.ResponseError(c, http.StatusForbidden, response.ErrCodeSessionOwnerMismatch)
-		return
-	}
 
 	// 执行关闭
-	session.Close()
-	if err := ss.SaveSession(session); err != nil {
-		logger.Errorf("session close save failed sid=%s user=%s err=%v", req.SID, userName, err)
-		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeSessionCloseFailed)
+	session, err := ss.UpdateSession(req.SID, func(s *models.Session) error {
+		if !sc.ensureAgentCanAccessSession(userName, s) {
+			return errSessionAccessDenied
+		}
+		if s.Closed {
+			return errSessionClosedState
+		}
+		if !isAdmin && s.CurAgentID != userName {
+			return errSessionOwnerMismatch
+		}
+		s.Close()
+		return nil
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, errSessionAccessDenied):
+			logger.Errorf("session close access denied user=%s sid=%s", userName, req.SID)
+			response.ResponseError(c, http.StatusForbidden, response.ErrCodeSessionAccessDenied)
+		case errors.Is(err, errSessionClosedState):
+			logger.Errorf("session close rejected closed sid=%s", req.SID)
+			response.ResponseErrorWithMsg(c, http.StatusBadRequest, response.ErrCodeSessionClosed, "session closed")
+		case errors.Is(err, errSessionOwnerMismatch):
+			logger.Errorf("session close owner mismatch sid=%s user=%s", req.SID, userName)
+			response.ResponseError(c, http.StatusForbidden, response.ErrCodeSessionOwnerMismatch)
+		default:
+			logger.Errorf("session close save failed sid=%s user=%s err=%v", req.SID, userName, err)
+			response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeSessionCloseFailed)
+		}
 		return
 	}
 
@@ -794,33 +852,36 @@ func (sc *SessionController) MarkRead(c *gin.Context) {
 
 	// 获取会话
 	ss := service.GetSessionService()
-	session, err := ss.GetSession(req.SID)
-	if err != nil || session == nil {
-		logger.Errorf("session read target not found sid=%s err=%v", req.SID, err)
-		response.ResponseError(c, http.StatusNotFound, response.ErrCodeSessionNotFound)
-		return
-	}
-
-	// 权限检查
-	if !sc.ensureAgentCanAccessSession(userName, session) {
-		logger.Errorf("session read access denied user=%s sid=%s", userName, req.SID)
-		response.ResponseError(c, http.StatusForbidden, response.ErrCodeSessionAccessDenied)
-		return
-	}
-
-	// 业务规则：普通客服只能标记自己负责的会话
-	if role == "agent" && session.CurAgentID != userName {
-		logger.Errorf("session read owner mismatch sid=%s owner=%s user=%s", req.SID, session.CurAgentID, userName)
-		response.ResponseError(c, http.StatusForbidden, response.ErrCodeSessionOwnerMismatch)
+	if ss == nil {
+		logger.Errorf("session read service unavailable user=%s sid=%s", userName, req.SID)
+		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeSessionServiceUnavailable)
 		return
 	}
 
 	// 执行已读标记
 	now := time.Now().Unix()
-	session.MarkRead(now)
-	if err := ss.SaveSession(session); err != nil {
-		logger.Errorf("session read save failed sid=%s user=%s err=%v", req.SID, userName, err)
-		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeSessionReadFailed)
+	session, err := ss.UpdateSession(req.SID, func(s *models.Session) error {
+		if !sc.ensureAgentCanAccessSession(userName, s) {
+			return errSessionAccessDenied
+		}
+		if role == "agent" && s.CurAgentID != userName {
+			return errSessionOwnerMismatch
+		}
+		s.MarkRead(now)
+		return nil
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, errSessionAccessDenied):
+			logger.Errorf("session read access denied user=%s sid=%s", userName, req.SID)
+			response.ResponseError(c, http.StatusForbidden, response.ErrCodeSessionAccessDenied)
+		case errors.Is(err, errSessionOwnerMismatch):
+			logger.Errorf("session read owner mismatch sid=%s user=%s", req.SID, userName)
+			response.ResponseError(c, http.StatusForbidden, response.ErrCodeSessionOwnerMismatch)
+		default:
+			logger.Errorf("session read save failed sid=%s user=%s err=%v", req.SID, userName, err)
+			response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeSessionReadFailed)
+		}
 		return
 	}
 
@@ -959,10 +1020,34 @@ func (sc *SessionController) MarkFollowUp(c *gin.Context) {
 		return
 	}
 
-	session.MarkFollowUp()
-	if err := ss.SaveSession(session); err != nil {
-		logger.Errorf("session follow-up save failed sid=%s user=%s err=%v", req.SID, userName, err)
-		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeSessionReadFailed)
+	session, err = ss.UpdateSession(req.SID, func(s *models.Session) error {
+		if !sc.ensureAgentCanAccessSession(userName, s) {
+			return errSessionAccessDenied
+		}
+		if role == "agent" && s.CurAgentID != userName {
+			return errSessionOwnerMismatch
+		}
+		if s.Closed {
+			return errSessionClosedState
+		}
+		s.MarkFollowUp()
+		return nil
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, errSessionAccessDenied):
+			logger.Errorf("session follow-up access denied user=%s sid=%s", userName, req.SID)
+			response.ResponseError(c, http.StatusForbidden, response.ErrCodeSessionAccessDenied)
+		case errors.Is(err, errSessionOwnerMismatch):
+			logger.Errorf("session follow-up owner mismatch sid=%s user=%s", req.SID, userName)
+			response.ResponseError(c, http.StatusForbidden, response.ErrCodeSessionOwnerMismatch)
+		case errors.Is(err, errSessionClosedState):
+			logger.Errorf("session follow-up rejected closed sid=%s", req.SID)
+			response.ResponseErrorWithMsg(c, http.StatusBadRequest, response.ErrCodeSessionClosed, "session closed")
+		default:
+			logger.Errorf("session follow-up save failed sid=%s user=%s err=%v", req.SID, userName, err)
+			response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeSessionReadFailed)
+		}
 		return
 	}
 
@@ -994,6 +1079,11 @@ func (sc *SessionController) Rate(c *gin.Context) {
 
 	// 获取会话
 	ss := service.GetSessionService()
+	if ss == nil {
+		logger.Errorf("session rate service unavailable sid=%s", req.SID)
+		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeSessionServiceUnavailable)
+		return
+	}
 	session, err := ss.GetSession(req.SID)
 	if err != nil || session == nil {
 		logger.Errorf("session rate target not found sid=%s err=%v", req.SID, err)
@@ -1023,23 +1113,34 @@ func (sc *SessionController) Rate(c *gin.Context) {
 	}
 
 	// 业务规则检查：只能评价一次
-	if session.RatingScore > 0 {
-		logger.Errorf("session rate already rated sid=%s existing_score=%d", req.SID, session.RatingScore)
-		response.ResponseErrorWithMsg(c, http.StatusConflict, response.ErrCodeSessionRateAlreadyDone, "session already rated")
-		return
-	}
-
 	// 执行评分
-	if !session.Rate(req.Score, req.Comment, time.Now().Unix()) {
-		logger.Errorf("session rate score invalid sid=%s score=%d", req.SID, req.Score)
-		response.ResponseError(c, http.StatusBadRequest, response.ErrCodeSessionRateInvalidScore)
-		return
-	}
-
-	// 保存评分
-	if err := ss.SaveSession(session); err != nil {
-		logger.Errorf("session rate save failed sid=%s err=%v", req.SID, err)
-		response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeSessionRateFailed)
+	session, err = ss.UpdateSession(req.SID, func(s *models.Session) error {
+		if s.AppID() != req.AppID || s.VisitorID() != req.VisitorID {
+			return errSessionAccessDenied
+		}
+		if s.RatingScore > 0 {
+			return errSessionAlreadyRated
+		}
+		if !s.Rate(req.Score, req.Comment, time.Now().Unix()) {
+			return errSessionInvalidRating
+		}
+		return nil
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, errSessionAccessDenied):
+			logger.Errorf("session rate owner mismatch sid=%s app_id=%s visitor_id=%s", req.SID, req.AppID, req.VisitorID)
+			response.ResponseError(c, http.StatusForbidden, response.ErrCodeSessionAccessDenied)
+		case errors.Is(err, errSessionAlreadyRated):
+			logger.Errorf("session rate already rated sid=%s", req.SID)
+			response.ResponseErrorWithMsg(c, http.StatusConflict, response.ErrCodeSessionRateAlreadyDone, "session already rated")
+		case errors.Is(err, errSessionInvalidRating):
+			logger.Errorf("session rate score invalid sid=%s score=%d", req.SID, req.Score)
+			response.ResponseError(c, http.StatusBadRequest, response.ErrCodeSessionRateInvalidScore)
+		default:
+			logger.Errorf("session rate save failed sid=%s err=%v", req.SID, err)
+			response.ResponseError(c, http.StatusInternalServerError, response.ErrCodeSessionRateFailed)
+		}
 		return
 	}
 

@@ -68,7 +68,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="created_at" :label="t('pageApps.createdAt')" width="120" align="center">
-          <template #default="{ row }">{{ formatDate(row.CreatedAt) }}</template>
+          <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
         </el-table-column>
         <el-table-column :label="t('pageApps.actions')" width="120" align="center">
           <template #default="{ row }">

@@ -240,6 +240,9 @@
     "sessionEncryptTip": "When enabled, only marks protocol header. Gateway/upstream handles encryption.",
     "ipLimit": "IP Restriction",
     "ipLimitTip": "Only allow whitelisted IPs to login",
+    "ipWhitelist": "IP Allowlist",
+    "ipWhitelistInput": "Enter allowed IPs, separated by commas, semicolons, or new lines",
+    "ipWhitelistTip": "When empty, no IP is blocked. Only applies when IP restriction is enabled",
     "captcha": "Login Captcha",
     "sensitiveWords": "Sensitive Words",
     "sensitiveWordsInput": "Separate words with comma or newline",
@@ -355,6 +358,8 @@
     "visitorName": "Visitor Name",
     "status": "Status",
     "sessions": "Sessions",
+    "ip": "IP",
+    "userAgent": "UA",
     "device": "Device",
     "region": "Region",
     "lastVisit": "Last Visit",
@@ -412,7 +417,12 @@
       "rebuild": "Rebuild Index"
     },
     "label": {
-      "currentBase": "Current Knowledge Base"
+      "currentBase": "Current Knowledge Base",
+      "baseUrl": "Base URL",
+      "dims": "Dims",
+      "topK": "TopK",
+      "topN": "TopN",
+      "topP": "Top P"
     },
     "stats": {
       "base": "Knowledge Bases",
@@ -450,6 +460,7 @@
       "model": "Model",
       "lastUpdated": "Last updated",
       "current": "Current",
+      "generating": "Generating...",
       "elapsed": "elapsed",
       "returnValue": "return"
     },
@@ -908,7 +919,8 @@
   },
   "role": {
     "admin": "Admin",
-    "agent": "Agent"
+    "agent": "Agent",
+    "system": "System"
   },
   "message": {
     "text": "Message",
@@ -926,6 +938,20 @@
     "clickDetails": "Click for details",
     "openAppSettings": "Open app settings",
     "retryConnection": "Retry connection"
+  },
+  "widget": {
+    "configLoadFailed": "Failed to load config. Check appId or service URL."
+  },
+  "sdkChat": {
+    "error": {
+      "connectionSlow": "Connection is slow, please wait",
+      "loadConfigFailed": "Failed to load config",
+      "connectionTimeout": "Connection timeout, please retry later",
+      "domainNotAllowed": "Domain is not in allowlist. Add current domain in admin app settings.",
+      "voiceUnsupported": "This browser does not support voice recording",
+      "noRateableSession": "No rateable session yet",
+      "rateSubmitFailed": "Failed to submit rating"
+    }
   },
   "common": {
     "tryAgainLater": "Please try again later",

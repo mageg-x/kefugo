@@ -681,7 +681,7 @@ function messageDisplayName(msg) {
     return String(msg?.sender_name || t("role.agent"));
   }
   if (msg?.business_type === BUSINESS_MESSAGE_TYPES.SYSTEM) {
-    return "系统";
+    return t("role.system");
   }
   return selectedSession.value?.visitor_id || t("pageInbox.word.visitor");
 }
@@ -809,19 +809,43 @@ async function reloadSessions() {
   }
 }
 
+function applySessionReadState(sid) {
+  const sessionID = String(sid || "").trim();
+  if (!sessionID) return;
+
+  const idx = sessions.value.findIndex((s) => s.sid === sessionID);
+  if (idx >= 0) {
+    sessions.value[idx].unread_count = 0;
+    if (sessions.value[idx].status === "unread") {
+      sessions.value[idx].status = "assigned";
+    }
+  }
+  if (selectedSession.value?.sid === sessionID) {
+    selectedSession.value.unread_count = 0;
+    if (selectedSession.value.status === "unread") {
+      selectedSession.value.status = "assigned";
+    }
+  }
+}
+
+async function markSessionReadIfPossible(sid) {
+  const sessionID = String(sid || "").trim();
+  if (!sessionID || !canControlSession.value) {
+    return false;
+  }
+  await api.readSession(sessionID);
+  applySessionReadState(sessionID);
+  return true;
+}
+
 async function selectSession(session) {
   selectedSession.value = session;
   messages.value = [];
   messageCursor.value = "";
   hasMoreHistory.value = false;
-  const idx = sessions.value.findIndex((s) => s.sid === session.sid);
-  if (idx >= 0) {
-    sessions.value[idx].unread_count = 0;
-    sessions.value[idx].status = sessions.value[idx].status === "unread" ? "assigned" : sessions.value[idx].status;
-  }
   await loadHistory();
   if (canControlSession.value) {
-    await api.readSession(session.sid).catch(() => { });
+    await markSessionReadIfPossible(session.sid).catch(() => { });
   }
 }
 
@@ -1784,11 +1808,7 @@ function onIncomingMessage(message) {
   if (selectedSession.value?.sid === sid) {
     appendMessage(mapped);
     if (canControlSession.value) {
-      api.readSession(sid).catch(() => { });
-    }
-    if (idx >= 0) {
-      sessions.value[idx].unread_count = 0;
-      sessions.value[idx].status = sessions.value[idx].status === "unread" ? "assigned" : sessions.value[idx].status;
+      markSessionReadIfPossible(sid).catch(() => { });
     }
   }
 

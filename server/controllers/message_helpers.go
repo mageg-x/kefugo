@@ -60,8 +60,10 @@ func saveSystemMessageForSession(session *models.Session, content string, ts int
 
 	// 更新会话的最后消息信息
 	if ss != nil {
-		session.TouchMessage(models.WSMessageTypeSystem, msg.Content, ts)
-		if err := ss.SaveSession(session); err != nil {
+		if _, err := ss.UpdateSession(session.SID, func(s *models.Session) error {
+			s.TouchMessage(models.WSMessageTypeSystem, msg.Content, ts)
+			return nil
+		}); err != nil {
 			logger.Errorf("system message session update failed sid=%s err=%v", session.SID, err)
 		}
 	}

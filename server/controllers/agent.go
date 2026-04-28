@@ -543,18 +543,51 @@ func (ac *AgentController) handleMessage(conn *AgentConn, sessionID, actionType 
 			Timestamp: now,
 		}
 
-		// 保存消息到存储
-		msgID, err := ms.SaveMessage(session.VisitorID(), session.AppID(), session.SessionSeq(), &msg)
-		if err != nil {
-			logger.Errorf("agent message save failed agent_id=%s sid=%s err=%v", agentID, sessionID, err)
+		// 在同一会话锁内完成关闭校验、消息落盘和会话更新，避免关闭/转接与发送并发串线。
+		if updated, updateErr := ss.UpdateSession(sessionID, func(s *models.Session) error {
+			if s.Closed || s.Status() == models.SessionStatusClosed {
+				return errSessionClosedState
+			}
+			if !isAdmin && s.CurAgentID != agentID {
+				return errSessionOwnerMismatch
+			}
+			msgID, saveErr := ms.SaveMessage(s.VisitorID(), s.AppID(), s.SessionSeq(), &msg)
+			if saveErr != nil {
+				return saveErr
+			}
+			msg.MsgID = msgID
+			s.OnAgentReply(now, msg.MsgID)
+			s.TouchMessage(payload.ContentType, payload.Content, now)
+			return nil
+		}); updateErr != nil {
+			if updateErr == errSessionClosedState {
+				logger.Warnf("agent send blocked: session closed agent_id=%s sid=%s", agentID, sessionID)
+				blockPayload := map[string]interface{}{
+					"from":         "system",
+					"content_type": models.WSContentTypeText,
+					"content":      "会话已结束，消息未发送",
+					"code":         "session_closed_blocked",
+					"timestamp":    now,
+				}
+				blockBytes, _ := json.Marshal(blockPayload)
+				blockMsg := models.Message{
+					MsgType:   models.WSMessageTypeSystem,
+					Content:   "会话已结束，消息未发送",
+					Meta:      string(blockBytes),
+					Timestamp: now,
+				}
+				PushMessageToAgent(agentID, sessionID, &blockMsg)
+				return
+			}
+			if updateErr == errSessionOwnerMismatch {
+				logger.Warnf("agent send blocked: owner changed agent_id=%s sid=%s", agentID, sessionID)
+				return
+			}
+			logger.Errorf("agent session update failed agent_id=%s sid=%s err=%v", agentID, sessionID, updateErr)
 			return
+		} else if updated != nil {
+			session = updated
 		}
-		msg.MsgID = msgID
-
-		// 更新会话状态：回复消息视为已读，未读计数清零
-		session.OnAgentReply(now, msg.MsgID)
-		session.TouchMessage(payload.ContentType, payload.Content, now)
-		_ = ss.SaveSession(session)
 		invalidateSessionListCache()
 
 		// 推送消息给访客
@@ -565,8 +598,22 @@ func (ac *AgentController) handleMessage(conn *AgentConn, sessionID, actionType 
 
 	case MessageTypeClose:
 		// 客服关闭会话
-		session.Close()
-		_ = ss.SaveSession(session)
+		if updated, updateErr := ss.UpdateSession(sessionID, func(s *models.Session) error {
+			if s.Closed {
+				return errSessionClosedState
+			}
+			s.Close()
+			return nil
+		}); updateErr != nil {
+			if updateErr == errSessionClosedState {
+				logger.Infof("agent close skipped already closed agent_id=%s sid=%s", agentID, sessionID)
+				return
+			}
+			logger.Errorf("agent close session failed agent_id=%s sid=%s err=%v", agentID, sessionID, updateErr)
+			return
+		} else if updated != nil {
+			session = updated
+		}
 		invalidateSessionListCache()
 
 		// 保存系统消息通知会话结束

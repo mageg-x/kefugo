@@ -27,10 +27,10 @@
           </template>
         </el-table-column>
         <el-table-column prop="sessions" :label="t('pageVisitors.sessions')" width="100" />
-        <el-table-column prop="ip" label="IP" min-width="130" />
+        <el-table-column prop="ip" :label="t('pageVisitors.ip')" min-width="130" />
         <el-table-column prop="device" :label="t('pageVisitors.device')" width="100" />
         <el-table-column prop="geo" :label="t('pageVisitors.region')" width="100" />
-        <el-table-column prop="user_agent" label="UA" min-width="220" show-overflow-tooltip />
+        <el-table-column prop="user_agent" :label="t('pageVisitors.userAgent')" min-width="220" show-overflow-tooltip />
         <el-table-column prop="last_visit" :label="t('pageVisitors.lastVisit')" width="180">
           <template #default="{ row }">{{ formatTime(row.last_visit) }}</template>
         </el-table-column>

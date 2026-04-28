@@ -6,7 +6,7 @@
       class="kefu-widget-error-float"
       @click="isOpen = true"
     >
-      当前域名未授权，点击查看详情
+      {{ t("domain.unauthorized") }}，{{ t("domain.clickDetails") }}
     </button>
 
     <button
@@ -14,11 +14,11 @@
       type="button"
       class="kefu-widget-trigger"
       :class="{ 'has-error': configError }"
-      :title="configError ? configErrorMessage : '在线咨询'"
+      :title="configError ? configErrorMessage : t('chat.liveChat')"
       @click="isOpen = true"
     >
       <img :src="widgetLogo" alt="logo" class="kefu-widget-trigger-logo" />
-      <span class="kefu-widget-trigger-text">在线咨询</span>
+      <span class="kefu-widget-trigger-text">{{ t("chat.liveChat") }}</span>
       <span v-if="unreadBadge > 0" class="kefu-widget-badge">{{ unreadBadgeText }}</span>
     </button>
 
@@ -29,7 +29,7 @@
           <div class="kefu-widget-header-meta">
             <h3 class="kefu-widget-title">{{ widgetName }}</h3>
             <span class="kefu-widget-status" :class="{ offline: !configOnline }">
-              {{ configOnline ? "在线" : "离线" }}
+              {{ configOnline ? t("status.online") : t("status.offline") }}
             </span>
           </div>
         </div>
@@ -52,11 +52,11 @@
       </div>
 
       <div v-if="configError" class="kefu-widget-error">
-        <p class="kefu-widget-error-title">当前域名未授权</p>
+        <p class="kefu-widget-error-title">{{ t("domain.unauthorized") }}</p>
         <p class="kefu-widget-error-desc">{{ configErrorMessage }}</p>
         <div class="kefu-widget-error-actions">
-          <button type="button" class="kefu-widget-error-btn" @click="retryLoad">重试连接</button>
-          <a class="kefu-widget-error-link" :href="adminAppsUrl" target="_blank" rel="noreferrer">打开应用设置</a>
+          <button type="button" class="kefu-widget-error-btn" @click="retryLoad">{{ t("domain.retryConnection") }}</button>
+          <a class="kefu-widget-error-link" :href="adminAppsUrl" target="_blank" rel="noreferrer">{{ t("domain.openAppSettings") }}</a>
         </div>
       </div>
     </section>
@@ -66,6 +66,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import TdChatCore from "./TdChatCore.vue";
+import { t } from "../script/i18n.js";
 
 const props = defineProps({
   appId: { type: String, default: "default" },
@@ -83,7 +84,7 @@ const props = defineProps({
 
 const isOpen = ref(false);
 const configError = ref(false);
-const configErrorMessage = ref("配置加载失败，请检查 appId 或服务地址。");
+const configErrorMessage = ref(t("widget.configLoadFailed", "配置加载失败，请检查 appId 或服务地址。"));
 const configName = ref("");
 const configLogo = ref("");
 const configOnline = ref(true);
@@ -92,7 +93,7 @@ const panelHeight = ref(640);
 const panelWidth = ref(390);
 const unreadBadge = ref(0);
 
-const widgetName = computed(() => configName.value || "零点客服");
+const widgetName = computed(() => configName.value || t("app.zeroSupport"));
 const resolvedUserId = computed(() => props.userId || props.visitorId || "");
 const unreadBadgeText = computed(() => (unreadBadge.value > 99 ? "99+" : String(unreadBadge.value)));
 const adminAppsUrl = computed(() => {
@@ -149,7 +150,7 @@ function handleUnreadChange(count) {
 
 function handleConfigError(error) {
   configError.value = true;
-  configErrorMessage.value = error?.message || "配置加载失败，请检查 appId 或服务地址。";
+  configErrorMessage.value = error?.message || t("widget.configLoadFailed", "配置加载失败，请检查 appId 或服务地址。");
   isOpen.value = true;
 }
 

@@ -102,6 +102,7 @@ func normalizeSystemSettings(cfg systemSettings) systemSettings {
 	if cfg.RateLimitBurst <= 0 {
 		cfg.RateLimitBurst = 60
 	}
+	cfg.IPWhitelist = normalizeIPWhitelist(cfg.IPWhitelist)
 	cfg.AIBotName = strings.TrimSpace(cfg.AIBotName)
 	if cfg.AIBotName == "" {
 		cfg.AIBotName = "AI机器人"
@@ -128,6 +129,26 @@ func normalizeSystemSettings(cfg systemSettings) systemSettings {
 		cfg.AIBotTopK = 20
 	}
 	return cfg
+}
+
+func normalizeIPWhitelist(raw string) string {
+	parts := strings.FieldsFunc(strings.TrimSpace(raw), func(r rune) bool {
+		return r == ',' || r == '\n' || r == '\r' || r == ';' || r == '，' || r == '；'
+	})
+	result := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		ip := strings.TrimSpace(part)
+		if ip == "" {
+			continue
+		}
+		if _, ok := seen[ip]; ok {
+			continue
+		}
+		seen[ip] = struct{}{}
+		result = append(result, ip)
+	}
+	return strings.Join(result, ",")
 }
 
 // loadSystemSettingsFromDB 从数据库加载设置，不可用时回退默认值。

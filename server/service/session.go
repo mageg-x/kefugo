@@ -3,7 +3,9 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger/v4"
@@ -23,7 +25,8 @@ import (
 // │   └─ visitor_id
 
 type SessionService struct {
-	kv *badger.DB
+	kv       *badger.DB
+	lockPool [256]sync.Mutex
 }
 
 const (
@@ -46,6 +49,14 @@ func GetSessionService() *SessionService {
 		instSessionService = &SessionService{kv: kv}
 		return instSessionService
 	}
+}
+
+func (s *SessionService) lockKey(key string) func() {
+	hasher := fnv.New32a()
+	_, _ = hasher.Write([]byte(key))
+	idx := hasher.Sum32() % uint32(len(s.lockPool))
+	s.lockPool[idx].Lock()
+	return s.lockPool[idx].Unlock
 }
 
 // sessionAppIndexKey 返回按 app_id 建立的会话二级索引 key。
@@ -147,6 +158,9 @@ func (s *SessionService) CreateSession(visitorID, appID string) (*models.Session
 
 // GetOrCreateSession 获取或创建会话
 func (s *SessionService) GetOrCreateSession(visitorID, appID string) (*models.Session, error) {
+	unlock := s.lockKey("visitor-app:" + strings.TrimSpace(visitorID) + ":" + strings.TrimSpace(appID))
+	defer unlock()
+
 	session, err := s.GetLatestSession(visitorID, appID)
 	if err == nil {
 		// 计算最后活跃时间
@@ -166,7 +180,10 @@ func (s *SessionService) GetOrCreateSession(visitorID, appID string) (*models.Se
 		if !session.Closed && time.Since(time.Unix(lastActive, 0)) > resolveSessionTimeout() {
 			// 自动关闭旧会话
 			session.Close()
-			s.SaveSession(session) // 持久化关闭状态
+			if saveErr := s.saveSessionNoLock(session); saveErr != nil {
+				logger.Errorf("session timeout close failed sid=%s err=%v", session.SID, saveErr)
+				return nil, saveErr
+			}
 
 			// 创建新会话
 			return s.CreateSession(visitorID, appID)
@@ -213,6 +230,16 @@ func resolveSessionTimeout() time.Duration {
 
 // SaveSession 保存会话（用于状态更新）
 func (s *SessionService) SaveSession(session *models.Session) error {
+	if session == nil {
+		logger.Errorf("session save session nil")
+		return fmt.Errorf("session is nil")
+	}
+	unlock := s.lockKey("sid:" + session.SID)
+	defer unlock()
+	return s.saveSessionNoLock(session)
+}
+
+func (s *SessionService) saveSessionNoLock(session *models.Session) error {
 	if session.SID == "" {
 		logger.Errorf("session save sid empty")
 		return fmt.Errorf("session SID is empty")
@@ -235,6 +262,10 @@ func (s *SessionService) SaveSession(session *models.Session) error {
 
 // 获取会话内容
 func (s *SessionService) GetSession(sessionID string) (*models.Session, error) {
+	return s.getSessionNoLock(sessionID)
+}
+
+func (s *SessionService) getSessionNoLock(sessionID string) (*models.Session, error) {
 	var session *models.Session
 	if sessionID == "" {
 		logger.Errorf("session get sid empty")
@@ -261,6 +292,33 @@ func (s *SessionService) GetSession(sessionID string) (*models.Session, error) {
 
 	if err != nil {
 		logger.Errorf("session get decode failed sid=%s err=%v", sessionID, err)
+		return nil, err
+	}
+	return session, nil
+}
+
+func (s *SessionService) UpdateSession(sessionID string, mutate func(*models.Session) error) (*models.Session, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, fmt.Errorf("sessionID is empty")
+	}
+
+	unlock := s.lockKey("sid:" + sessionID)
+	defer unlock()
+
+	session, err := s.getSessionNoLock(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session == nil {
+		return nil, fmt.Errorf("session not found")
+	}
+	if mutate != nil {
+		if err := mutate(session); err != nil {
+			return nil, err
+		}
+	}
+	if err := s.saveSessionNoLock(session); err != nil {
 		return nil, err
 	}
 	return session, nil

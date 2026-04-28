@@ -1067,14 +1067,14 @@ async function loadConfigAndConnect() {
   let loadingTooSlowTip = null;
   try {
     loadingTooSlowTip = setTimeout(() => {
-      emit("ws-error", new Error("Connection is slow, please wait"));
+      emit("ws-error", new Error(t("sdkChat.error.connectionSlow", "连接较慢，请稍候")));
     }, 3000);
     api.setBaseURL(props.apiBaseUrl);
     api.setUserId(visitorId.value);
     const response = await api.getConfig(props.appId);
 
     if (response?.code !== 0 || !response?.data) {
-      throw new Error(response?.msg || "Failed to load config");
+      throw new Error(response?.msg || t("sdkChat.error.loadConfigFailed", "加载配置失败"));
     }
 
     config.value = response.data;
@@ -1083,12 +1083,12 @@ async function loadConfigAndConnect() {
     ensureWsConnected();
     wsConnectTimeoutTimer = setTimeout(() => {
       if (wsClient.value && !wsClient.value.isConnected) {
-        emit("ws-error", new Error("Connection timeout, please retry later"));
+        emit("ws-error", new Error(t("sdkChat.error.connectionTimeout", "连接超时，请稍后重试")));
       }
     }, 3000);
   } catch (error) {
     if (isDomainForbiddenCode(error?.code, error?.httpStatus)) {
-      emit("config-error", new Error("Domain is not in allowlist. Add current domain in admin app settings."));
+      emit("config-error", new Error(t("sdkChat.error.domainNotAllowed", "当前域名未授权，请在管理端应用设置中添加当前域名。")));
       return;
     }
     emit("config-error", error);
@@ -1097,6 +1097,14 @@ async function loadConfigAndConnect() {
       clearTimeout(loadingTooSlowTip);
     }
   }
+}
+
+function defaultFileName() {
+  return t("message.file", "文件");
+}
+
+function defaultImageFileName() {
+  return `${t("message.image", "图片")}.jpg`;
 }
 
 function dispatchWithStatus(messageId, sendFn) {
@@ -1190,7 +1198,7 @@ async function sendFileLike(file, presetDuration = 0) {
       contentType,
       {
         url: temporaryUrl,
-        name: file.name || "file",
+        name: file.name || defaultFileName(),
         size: file.size || 0,
         duration,
         replyTo: currentReply,
@@ -1206,7 +1214,7 @@ async function sendFileLike(file, presetDuration = 0) {
     const remoteUrl = toAbsoluteMediaURL(uploaded.url);
     const retryData = {
       url: remoteUrl,
-      name: uploaded.name || file.name || "file",
+      name: uploaded.name || file.name || defaultFileName(),
       size: Number(uploaded.size || file.size || 0),
       duration,
       replyTo: currentReply,
@@ -1234,9 +1242,9 @@ async function sendFileLike(file, presetDuration = 0) {
         return wsClient.value?.sendAudio(remoteUrl, Math.max(1, Math.round(Number(duration || 0))), { replyTo: currentReply });
       }
       if (contentType === BUSINESS_CONTENT_TYPES.IMAGE) {
-        return wsClient.value?.sendImage(remoteUrl, retryData.name || "image.jpg", { replyTo: currentReply });
+        return wsClient.value?.sendImage(remoteUrl, retryData.name || defaultImageFileName(), { replyTo: currentReply });
       }
-      return wsClient.value?.sendFile(remoteUrl, retryData.name || "file", retryData.size || 0, { replyTo: currentReply });
+      return wsClient.value?.sendFile(remoteUrl, retryData.name || defaultFileName(), retryData.size || 0, { replyTo: currentReply });
     });
     replyTo.value = null;
   } catch (error) {
@@ -1378,12 +1386,12 @@ function retryMessageById(messageId) {
       return wsClient.value?.sendText(String(data.content || ""), { replyTo: data.replyTo || null });
     }
     if (contentType === BUSINESS_CONTENT_TYPES.IMAGE) {
-      return wsClient.value?.sendImage(String(data.url || ""), String(data.name || "image.jpg"), { replyTo: data.replyTo || null });
+      return wsClient.value?.sendImage(String(data.url || ""), String(data.name || defaultImageFileName()), { replyTo: data.replyTo || null });
     }
     if (contentType === BUSINESS_CONTENT_TYPES.AUDIO) {
       return wsClient.value?.sendAudio(String(data.url || ""), Math.max(1, Math.round(Number(data.duration || 0))), { replyTo: data.replyTo || null });
     }
-    return wsClient.value?.sendFile(String(data.url || ""), String(data.name || "file"), Number(data.size || 0), { replyTo: data.replyTo || null });
+    return wsClient.value?.sendFile(String(data.url || ""), String(data.name || defaultFileName()), Number(data.size || 0), { replyTo: data.replyTo || null });
   });
 }
 
@@ -1622,7 +1630,7 @@ function appendEmoji(emoji) {
 function toggleVoiceRecord() {
   showEmojiPicker.value = false;
   if (!isVoiceSupported.value) {
-    emit("ws-error", new Error("This browser does not support voice recording"));
+    emit("ws-error", new Error(t("sdkChat.error.voiceUnsupported", "当前浏览器不支持录音")));
     return;
   }
   if (isRecording.value) {
@@ -1679,7 +1687,7 @@ function closeRateDialog() {
 
 async function submitRate() {
   if (!sessionId.value || rateScore.value < 1) {
-    emit("ws-error", new Error("No rateable session yet"));
+    emit("ws-error", new Error(t("sdkChat.error.noRateableSession", "当前暂无可评价会话")));
     return;
   }
   rateSaving.value = true;
@@ -1692,7 +1700,7 @@ async function submitRate() {
       comment: String(rateComment.value || ""),
     });
     if (resp?.data?.code !== 0) {
-      throw new Error(resp?.data?.msg || "Failed to submit rating");
+      throw new Error(resp?.data?.msg || t("sdkChat.error.rateSubmitFailed", "提交评分失败"));
     }
     closeRateDialog();
   } catch (error) {

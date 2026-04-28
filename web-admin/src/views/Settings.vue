@@ -82,6 +82,15 @@
               <el-switch v-model="settings.ipLimit" />
               <span class="form-tip">{{ t('pageSettings.ipLimitTip') }}</span>
             </el-form-item>
+            <el-form-item :label="t('pageSettings.ipWhitelist')">
+              <el-input
+                v-model="settings.ipWhitelist"
+                type="textarea"
+                :rows="3"
+                :placeholder="t('pageSettings.ipWhitelistInput')"
+              />
+              <span class="form-tip">{{ t('pageSettings.ipWhitelistTip') }}</span>
+            </el-form-item>
             <el-form-item :label="t('pageSettings.captcha')">
               <el-switch v-model="settings.captcha" />
             </el-form-item>
@@ -180,6 +189,7 @@ const settings = ref({
   smtpFrom: "kefu@localhost",
   sessionEncrypt: true,
   ipLimit: false,
+  ipWhitelist: "",
   captcha: false,
   sensitiveWords: "",
   rateLimitEnabled: true,

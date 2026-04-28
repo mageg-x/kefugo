@@ -790,10 +790,11 @@ func isIPAllowed(remoteIP, whitelist string) bool {
 	if remoteIP == "127.0.0.1" || remoteIP == "::1" || remoteIP == "::ffff:127.0.0.1" {
 		return true
 	}
-	if whitelist == "" {
+	normalized := normalizeIPWhitelist(whitelist)
+	if normalized == "" {
 		return true
 	}
-	for _, item := range strings.Split(whitelist, ",") {
+	for _, item := range strings.Split(normalized, ",") {
 		ip := strings.TrimSpace(item)
 		if ip == "" {
 			continue

@@ -21,8 +21,8 @@
     </div>
 
     <el-table :data="rows" v-loading="loading" stripe>
-      <el-table-column prop="CreatedAt" :label="t('pageAudit.time')" width="180">
-        <template #default="{ row }">{{ formatDate(row.CreatedAt) }}</template>
+      <el-table-column prop="created_at" :label="t('pageAudit.time')" width="180">
+        <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
       </el-table-column>
       <el-table-column prop="operator" :label="t('pageAudit.operator')" width="120" />
       <el-table-column prop="operator_role" :label="t('pageAudit.role')" width="120" />

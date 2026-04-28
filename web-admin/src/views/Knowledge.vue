@@ -293,11 +293,11 @@
         <el-table-column prop="name" :label="t('pageKnowledge.table.configName')" min-width="100" />
         <el-table-column prop="provider" :label="t('pageKnowledge.table.provider')" min-width="90" />
         <el-table-column prop="model_name" :label="t('pageKnowledge.table.modelName')" min-width="180" />
-        <el-table-column v-if="activeModelType === 'embedding'" prop="dims" label="Dims" width="70" />
-        <el-table-column v-if="activeModelType === 'embedding'" prop="top_k" label="TopK" width="70" />
-        <el-table-column v-if="activeModelType === 'rerank'" prop="top_n" label="TopN" width="70" />
+        <el-table-column v-if="activeModelType === 'embedding'" prop="dims" :label="t('pageKnowledge.label.dims')" width="70" />
+        <el-table-column v-if="activeModelType === 'embedding'" prop="top_k" :label="t('pageKnowledge.label.topK')" width="70" />
+        <el-table-column v-if="activeModelType === 'rerank'" prop="top_n" :label="t('pageKnowledge.label.topN')" width="70" />
         <el-table-column prop="api_key_mask" :label="t('pageKnowledge.table.apiKey')" min-width="120" />
-        <el-table-column prop="base_url" label="Base URL" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="base_url" :label="t('pageKnowledge.label.baseUrl')" min-width="180" show-overflow-tooltip />
         <el-table-column :label="t('pageKnowledge.table.default')" width="80">
           <template #default="{ row }">
             <el-tag :type="row.is_default ? 'success' : 'info'" size="small">
@@ -373,19 +373,19 @@
             {{ t("pageKnowledge.hint.keepApiKeyInEdit") }}
           </div>
         </el-form-item>
-        <el-form-item label="Base URL">
+        <el-form-item :label="t('pageKnowledge.label.baseUrl')">
           <el-input v-model="apiModelForm.base_url" :placeholder="apiModelForm.provider === 'ollama' ? 'http://localhost:11434' : t('pageKnowledge.placeholder.defaultBaseURL')" />
         </el-form-item>
         <el-form-item :label="t('pageKnowledge.table.modelName')">
           <el-input v-model="apiModelForm.model_name" :placeholder="t('pageKnowledge.placeholder.modelName')" />
         </el-form-item>
-        <el-form-item v-if="apiModelForm.model_type === 'embedding'" label="Dims">
+        <el-form-item v-if="apiModelForm.model_type === 'embedding'" :label="t('pageKnowledge.label.dims')">
           <el-input-number v-model="apiModelForm.dims" :min="64" :max="4096" :step="64" />
         </el-form-item>
-        <el-form-item v-if="apiModelForm.model_type === 'embedding'" label="TopK">
+        <el-form-item v-if="apiModelForm.model_type === 'embedding'" :label="t('pageKnowledge.label.topK')">
           <el-input-number v-model="apiModelForm.top_k" :min="1" :max="100" />
         </el-form-item>
-        <el-form-item v-if="apiModelForm.model_type === 'rerank'" label="TopN">
+        <el-form-item v-if="apiModelForm.model_type === 'rerank'" :label="t('pageKnowledge.label.topN')">
           <el-input-number v-model="apiModelForm.top_n" :min="1" :max="50" />
         </el-form-item>
         <el-form-item :label="t('pageKnowledge.table.timeoutSec')">
@@ -394,7 +394,7 @@
         <el-form-item v-if="apiModelForm.model_type === 'chat'" :label="t('pageKnowledge.table.temperature')">
           <el-input-number v-model="apiModelForm.temperature" :min="0" :max="2" :step="0.1" />
         </el-form-item>
-        <el-form-item v-if="apiModelForm.model_type === 'chat'" label="Top P">
+        <el-form-item v-if="apiModelForm.model_type === 'chat'" :label="t('pageKnowledge.label.topP')">
           <el-input-number v-model="apiModelForm.top_p" :min="0.1" :max="1" :step="0.1" />
         </el-form-item>
         <el-form-item v-if="apiModelForm.model_type === 'chat'" :label="t('pageKnowledge.table.maxTokens')">
@@ -1076,7 +1076,7 @@ async function runQATest() {
   qaStreaming.value = true;
   const historyItem = reactive({
     question: query,
-    answer: "正在生成...",
+    answer: t("pageKnowledge.word.generating"),
     sources: [],
     chunks: [],
     model_provider: "",

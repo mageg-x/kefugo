@@ -677,9 +677,15 @@ func (vc *VisitorController) WSHandler(c *gin.Context) {
 	}
 
 	// 更新会话的访客设备信息
-	session.TouchVisitorProfile(clientIP, userAgent, device, geo)
-	_ = ss.SaveSession(session)
-	invalidateSessionListCache()
+	if updated, updateErr := ss.UpdateSession(session.SID, func(s *models.Session) error {
+		s.TouchVisitorProfile(clientIP, userAgent, device, geo)
+		return nil
+	}); updateErr != nil {
+		logger.Errorf("visitor profile update failed sid=%s err=%v", session.SID, updateErr)
+	} else if updated != nil {
+		session = updated
+		invalidateSessionListCache()
+	}
 
 	// 将连接注册到全局连接池
 	registerVisitorConn(session.SID, visitorConn)
@@ -706,9 +712,21 @@ func (vc *VisitorController) WSHandler(c *gin.Context) {
 				Meta:      string(wb),
 				Timestamp: now,
 			}
-			session.WelcomeSentAt = now
-			_ = ss.SaveSession(session)
-			_ = PushMessageToVisitor(session.VisitorID(), session.SID, &welMsg)
+			shouldSendWelcome := false
+			if updated, updateErr := ss.UpdateSession(session.SID, func(s *models.Session) error {
+				if s.WelcomeSentAt <= 0 {
+					s.WelcomeSentAt = now
+					shouldSendWelcome = true
+				}
+				return nil
+			}); updateErr != nil {
+				logger.Errorf("visitor welcome mark failed sid=%s err=%v", session.SID, updateErr)
+			} else if updated != nil {
+				session = updated
+			}
+			if shouldSendWelcome {
+				_ = PushMessageToVisitor(session.VisitorID(), session.SID, &welMsg)
+			}
 		}
 	}
 
@@ -860,16 +878,10 @@ func (vc *VisitorController) handleAck(sessionID string, payloadBytes []byte) {
 		return
 	}
 
-	// 获取会话对象
-	session, err := ss.GetSession(sessionID)
-	if err != nil || session == nil {
-		logger.Errorf("visitor ack session not found sid=%s msg_id=%s err=%v", sessionID, msgID, err)
-		return
-	}
-
-	// 更新会话的最后确认消息ID
-	session.MarkVisitorDelivered(msgID)
-	if err := ss.SaveSession(session); err != nil {
+	if _, err := ss.UpdateSession(sessionID, func(s *models.Session) error {
+		s.MarkVisitorDelivered(msgID)
+		return nil
+	}); err != nil {
 		logger.Errorf("visitor ack save session failed sid=%s msg_id=%s err=%v", sessionID, msgID, err)
 	}
 }
@@ -895,33 +907,33 @@ func (vc *VisitorController) handleMessage(sessionID, msgType string, payloadByt
 
 	now := time.Now().Unix()
 
-	// 商业化行为：访客在已关闭会话中继续发送消息时，自动重开当前会话并进入待接待队列
-	// 这样设计有两个好处：
-	// 1. 避免用户消息被拒绝，提供更好的体验
-	// 2. 避免刷新页面时不断创建新会话（因为使用相同的sessionID）
-	if session.Closed {
-		logger.Infof("visitor message reopen closed session sid=%s", sessionID)
-		session.ReopenByVisitor(now)
-		if err := ss.SaveSession(session); err != nil {
-			logger.Errorf("visitor reopen closed session save failed sid=%s err=%v", sessionID, err)
-		}
-		invalidateSessionListCache()
-	}
-
 	// 处理typing状态消息
 	if msgType == MessageTypeTyping {
-		// 只有已分配客服且会话未关闭时才推送typing状态给客服
+		reopened := false
+		updated, updateErr := ss.UpdateSession(sessionID, func(s *models.Session) error {
+			if s.Closed {
+				logger.Infof("visitor typing reopen closed session sid=%s", sessionID)
+				s.ReopenByVisitor(now)
+				reopened = true
+			}
+			s.LastActiveAt = now
+			return nil
+		})
+		if updateErr != nil {
+			logger.Errorf("visitor typing save session failed sid=%s err=%v", sessionID, updateErr)
+			return
+		}
+		if updated != nil {
+			session = updated
+		}
+		if reopened {
+			invalidateSessionListCache()
+		}
 		if session.CurAgentID != "" && !session.Closed {
 			PushTypingToAgent(session.CurAgentID, session.SID)
 		}
-		// typing只表示输入态，不应计入未读消息数，只更新最后活跃时间
-		session.LastActiveAt = now
-		_ = ss.SaveSession(session)
 		return
 	}
-
-	// 只有真实消息才计入访客未读与会话状态推进
-	session.OnVisitorMessage(now, "")
 
 	ms := service.GetMsgService()
 	if ms == nil {
@@ -979,35 +991,45 @@ func (vc *VisitorController) handleMessage(sessionID, msgType string, payloadByt
 		return
 	}
 	msg.MsgID = msgID
-	session.MarkVisitorMessage(msg.MsgID)
-
-	// 更新会话的最后消息信息
-	session.TouchMessage(payload.ContentType, payload.Content, now)
-
-	_ = ss.SaveSession(session)
-	invalidateSessionListCache()
 
 	// 获取系统配置检查自动分配策略
 	cfg := getSystemSettingsCached()
+	autoAssignedAgent := ""
+	updated, updateErr := ss.UpdateSession(sessionID, func(s *models.Session) error {
+		if s.Closed {
+			logger.Infof("visitor message reopen closed session sid=%s", sessionID)
+			s.ReopenByVisitor(now)
+		}
+		s.OnVisitorMessage(now, msg.MsgID)
+		s.TouchMessage(payload.ContentType, payload.Content, now)
 
-	// 自动分配客服：如果会话还没有分配客服且开启了自动分配
-	if session.CurAgentID == "" {
-		if cfg.AutoAssign {
+		if s.CurAgentID == "" && cfg.AutoAssign {
 			us := service.GetUserService()
-			if agent, _ := us.FindAgent(session.AppID()); agent != nil {
-				// 分配客服
-				session.AssignAgent(agent.Username, now)
-				_ = ss.SaveSession(session)
-				invalidateSessionListCache()
-
-				// 通知访客已被分配
-				PushMessageToVisitor(session.VisitorID(), session.SID, &models.Message{
-					MsgType:   MessageTypeSystem,
-					Content:   fmt.Sprintf("%s 为您服务", agent.Username),
-					Timestamp: now,
-				})
+			if us != nil {
+				if agent, _ := us.FindAgent(s.AppID()); agent != nil {
+					s.AssignAgent(agent.Username, now)
+					autoAssignedAgent = agent.Username
+				}
 			}
 		}
+		return nil
+	})
+	if updateErr != nil {
+		logger.Errorf("visitor message save session failed sid=%s err=%v", sessionID, updateErr)
+		return
+	}
+	if updated != nil {
+		session = updated
+	}
+	invalidateSessionListCache()
+
+	// 自动分配客服：如果会话还没有分配客服且开启了自动分配
+	if autoAssignedAgent != "" {
+		PushMessageToVisitor(session.VisitorID(), session.SID, &models.Message{
+			MsgType:   MessageTypeSystem,
+			Content:   fmt.Sprintf("%s 为您服务", autoAssignedAgent),
+			Timestamp: now,
+		})
 	}
 
 	shouldTriggerAIBot := vc.shouldTriggerAIBotReply(session, payload, cfg)
@@ -1215,10 +1237,22 @@ func (vc *VisitorController) dispatchAIBotReply(sessionID, triggerMsgID, questio
 	msg.MsgID = msgID
 
 	// 机器人已完成回复，清理未读并更新会话摘要。
-	session.OnAgentReply(now, msg.MsgID)
-	session.TouchMessage(models.WSContentTypeText, answer, now)
-	if err := ss.SaveSession(session); err != nil {
-		logger.Errorf("ai bot save session failed sid=%s err=%v", sessionID, err)
+	updated, updateErr := ss.UpdateSession(sessionID, func(s *models.Session) error {
+		if !vc.canContinueAIBotReply(s, triggerMsgID, triggerTs, cfg) {
+			return errSessionClosedState
+		}
+		s.OnAgentReply(now, msg.MsgID)
+		s.TouchMessage(models.WSContentTypeText, answer, now)
+		return nil
+	})
+	if updateErr != nil {
+		if updateErr != errSessionClosedState {
+			logger.Errorf("ai bot save session failed sid=%s err=%v", sessionID, updateErr)
+		}
+		return
+	}
+	if updated != nil {
+		session = updated
 	}
 	invalidateSessionListCache()
 

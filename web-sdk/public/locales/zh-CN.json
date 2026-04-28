@@ -240,6 +240,9 @@
     "sessionEncryptTip": "开启后仅标记协议头，由网关或上游执行加密链路",
     "ipLimit": "IP 限制",
     "ipLimitTip": "开启后仅允许白名单 IP 登录",
+    "ipWhitelist": "IP 白名单",
+    "ipWhitelistInput": "请输入允许登录的 IP，多个用逗号、分号或换行分隔",
+    "ipWhitelistTip": "留空时不拦截任何 IP；仅在开启 IP 限制时生效",
     "captcha": "登录验证码",
     "sensitiveWords": "敏感词",
     "sensitiveWordsInput": "多个词用逗号或换行分隔",
@@ -355,6 +358,8 @@
     "visitorName": "访客名称",
     "status": "状态",
     "sessions": "会话数",
+    "ip": "IP",
+    "userAgent": "UA",
     "device": "设备",
     "region": "地区",
     "lastVisit": "最后访问",
@@ -412,7 +417,12 @@
       "rebuild": "重建索引"
     },
     "label": {
-      "currentBase": "当前知识库"
+      "currentBase": "当前知识库",
+      "baseUrl": "Base URL",
+      "dims": "Dims",
+      "topK": "TopK",
+      "topN": "TopN",
+      "topP": "Top P"
     },
     "stats": {
       "base": "知识库",
@@ -450,6 +460,7 @@
       "model": "模型",
       "lastUpdated": "最后更新",
       "current": "当前",
+      "generating": "正在生成...",
       "elapsed": "耗时",
       "returnValue": "返回"
     },
@@ -910,7 +921,8 @@
   },
   "role": {
     "admin": "管理员",
-    "agent": "客服专员"
+    "agent": "客服专员",
+    "system": "系统"
   },
   "message": {
     "text": "消息",
@@ -928,6 +940,20 @@
     "clickDetails": "点击查看详情",
     "openAppSettings": "打开应用设置",
     "retryConnection": "重试连接"
+  },
+  "widget": {
+    "configLoadFailed": "配置加载失败，请检查 appId 或服务地址。"
+  },
+  "sdkChat": {
+    "error": {
+      "connectionSlow": "连接较慢，请稍候",
+      "loadConfigFailed": "加载配置失败",
+      "connectionTimeout": "连接超时，请稍后重试",
+      "domainNotAllowed": "当前域名未授权，请在管理端应用设置中添加当前域名。",
+      "voiceUnsupported": "当前浏览器不支持录音",
+      "noRateableSession": "当前暂无可评价会话",
+      "rateSubmitFailed": "提交评分失败"
+    }
   },
   "common": {
     "tryAgainLater": "请稍后重试",
